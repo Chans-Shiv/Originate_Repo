@@ -23,9 +23,8 @@ var host = new HostBuilder()
         services.ConfigureFunctionsApplicationInsights();
 
         services.AddOptions<OrigenateOptions>().Configure<IConfiguration>((o, c) => c.Bind(o));
-        services.AddOptions<BlobConnectionOptions>()
-            .Configure<IConfiguration>((o, c) => c.GetSection("BlobConnection").Bind(o));
 
+        // Dataverse still uses interactive browser; storage now uses connection string.
         services.AddSingleton<TokenCredential>(sp =>
         {
             var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<OrigenateOptions>>().Value;
@@ -38,10 +37,10 @@ var host = new HostBuilder()
 
         services.AddSingleton(sp =>
         {
-            var blob = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<BlobConnectionOptions>>().Value;
-            if (string.IsNullOrWhiteSpace(blob.ServiceUri))
-                throw new InvalidOperationException("BlobConnection__serviceUri is not configured.");
-            return new BlobServiceClient(new Uri(blob.ServiceUri), sp.GetRequiredService<TokenCredential>());
+            var cs = sp.GetRequiredService<IConfiguration>()["BlobConnection"];
+            if (string.IsNullOrWhiteSpace(cs))
+                throw new InvalidOperationException("BlobConnection is not configured.");
+            return new BlobServiceClient(cs);
         });
 
         // Dataverse — interfaces only where there's a real reason to swap (gateway, retry policy, bulk ops)

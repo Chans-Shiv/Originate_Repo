@@ -39,21 +39,44 @@ First storage call → browser sign-in (cached for session). First Dataverse cal
 
 Drop a `.xlsx` into `originate-landing` via Azure Storage Explorer to fire the trigger.
 
-## Project layout
+## Architecture (SOLID + design patterns)
 
 ```
 src/OrigenateFunction/
-├── Functions/OrigenateBlobTrigger.cs   # entry point
-├── Services/
-│   ├── OrigenateProcessor.cs           # 8-step pipeline
-│   ├── DataverseClient.cs              # Web API: CreateMultiple, $batch delete, paged retrieve
-│   ├── DataverseTokenProvider.cs       # OAuth token caching
-│   ├── BlobService.cs                  # archive / failed / failure-file upload
-│   ├── ExcelReader.cs                  # OpenXml SAX streaming (150K-row safe)
-│   └── FailureWriter.cs                # CSV serializer for row failures
-├── Models/
-│   ├── ColumnMap.cs                    # ★ edit me — single source of truth
-│   ├── OrigenateRow.cs
-│   └── ExceptionRow.cs
-└── Program.cs                          # DI / credential setup
+├── Abstractions/        — interfaces only (DIP)
+├── Options/             — OrigenateOptions, BlobConnectionOptions (Options pattern)
+├── Dataverse/           — Gateway + Builder + Factory + RetryPolicy
+│   ├── DataverseGateway        (HTTP + auth + retry orchestration)
+│   ├── DataverseTokenProvider  (OAuth token caching)
+│   ├── HttpRequestFactory      (authorized HttpRequestMessage — Factory)
+│   ├── ExponentialBackoffRetryPolicy  (Strategy)
+│   ├── MultipartBatchBuilder   ($batch payloads — Builder)
+│   ├── BulkWriter / BulkDeleter / PagedReader / InFilterBuilder
+│   └── DataverseConnectivityCheck (WhoAmI)
+├── Repositories/        — one per table (Repository pattern)
+│   ├── TableRepositoryBase
+│   └── StgOrigenateRepository / HoldingRepository / ExceptionsRepository
+├── Storage/             — split by responsibility (SRP/ISP)
+│   ├── ContainerClientFactory  (Factory)
+│   ├── BlobArchiver            (landing → archive)
+│   ├── FailedBlobMover         (landing → failed)
+│   └── BlobFailureFileWriter   (per-row CSV → failed)
+├── Excel/OpenXmlExcelReader.cs  (streaming reader)
+├── Mappers/JsonRowMapper.cs     (JsonElement → record dict)
+├── Pipeline/            — orchestration via Strategy/Chain
+│   ├── PipelineExecutor         (iterates IPipelineStep — OCP)
+│   └── Steps/                   (Download, Connect, ClearHolding,
+│                                  BackupOldRows, TruncateStg, LoadExcel,
+│                                  InsertExceptions, Reconcile,
+│                                  UploadFailures, ArchiveBlob)
+├── Models/              — DTOs + ColumnMap (★ edit me)
+├── Functions/OrigenateBlobTrigger.cs  (thin entry point)
+└── Program.cs           (DI — binds interfaces to implementations)
 ```
+
+**SOLID application:**
+- **S**RP — every class has one reason to change (a single step, one HTTP concern, one table).
+- **O**CP — pipeline is open for extension (add an `IPipelineStep` and register it), closed for modification (executor is unchanged).
+- **L**SP — repositories all honor `ITableRepository`; substitutable.
+- **I**SP — small focused interfaces (`IBulkWriter`, `IBulkDeleter`, `IPagedReader`, etc.) instead of one fat client.
+- **D**IP — every consumer depends on an interface; concrete bindings live only in `Program.cs`.

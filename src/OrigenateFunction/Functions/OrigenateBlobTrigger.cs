@@ -1,17 +1,18 @@
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
-using OrigenateFunction.Services;
+using OrigenateFunction.Abstractions;
+using OrigenateFunction.Pipeline;
 
 namespace OrigenateFunction.Functions;
 
 public sealed class OrigenateBlobTrigger
 {
-    private readonly OrigenateProcessor _processor;
+    private readonly PipelineExecutor _pipeline;
     private readonly ILogger<OrigenateBlobTrigger> _log;
 
-    public OrigenateBlobTrigger(OrigenateProcessor processor, ILogger<OrigenateBlobTrigger> log)
+    public OrigenateBlobTrigger(PipelineExecutor pipeline, ILogger<OrigenateBlobTrigger> log)
     {
-        _processor = processor;
+        _pipeline = pipeline;
         _log = log;
     }
 
@@ -23,6 +24,8 @@ public sealed class OrigenateBlobTrigger
     {
         var fullName = name + ".xlsx";
         _log.LogInformation("Blob trigger fired for {Blob}", fullName);
-        await _processor.ProcessAsync(blobStream, fullName, context.CancellationToken);
+
+        var ctx = new PipelineContext { BlobName = fullName, BlobStream = blobStream };
+        await _pipeline.RunAsync(ctx, context.CancellationToken);
     }
 }

@@ -6,3 +6,5 @@ obj/
 .vscode/
 local.settings.json
 *.pubxml.user
+.claude/
+

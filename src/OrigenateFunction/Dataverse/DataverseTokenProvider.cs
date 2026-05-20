@@ -1,19 +1,21 @@
 using Azure.Core;
-using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
+using OrigenateFunction.Abstractions;
+using OrigenateFunction.Options;
 
-namespace OrigenateFunction.Services;
+namespace OrigenateFunction.Dataverse;
 
-public sealed class DataverseTokenProvider
+public sealed class DataverseTokenProvider : IDataverseTokenProvider
 {
     private readonly TokenCredential _credential;
     private readonly string _scope;
     private readonly SemaphoreSlim _lock = new(1, 1);
     private AccessToken? _cached;
 
-    public DataverseTokenProvider(TokenCredential credential, IConfiguration cfg)
+    public DataverseTokenProvider(TokenCredential credential, IOptions<OrigenateOptions> opts)
     {
         _credential = credential;
-        var url = cfg["DataverseUrl"]
+        var url = opts.Value.DataverseUrl
             ?? throw new InvalidOperationException("DataverseUrl is not configured.");
         _scope = url.TrimEnd('/') + "/.default";
     }
@@ -32,9 +34,6 @@ public sealed class DataverseTokenProvider
             _cached = await _credential.GetTokenAsync(ctx, ct);
             return _cached.Value.Token;
         }
-        finally
-        {
-            _lock.Release();
-        }
+        finally { _lock.Release(); }
     }
 }

@@ -4,12 +4,12 @@ using DocumentFormat.OpenXml.Spreadsheet;
 using Microsoft.Extensions.Logging;
 using OrigenateFunction.Models;
 
-namespace OrigenateFunction.Services;
+namespace OrigenateFunction.Excel;
 
-public sealed class ExcelReader
+public sealed class OpenXmlExcelReader
 {
-    private readonly ILogger<ExcelReader> _log;
-    public ExcelReader(ILogger<ExcelReader> log) => _log = log;
+    private readonly ILogger<OpenXmlExcelReader> _log;
+    public OpenXmlExcelReader(ILogger<OpenXmlExcelReader> log) => _log = log;
 
     public IEnumerable<OrigenateRow> StreamRows(string xlsxPath)
     {
@@ -26,8 +26,7 @@ public sealed class ExcelReader
 
         while (reader.Read())
         {
-            if (reader.ElementType != typeof(Row)) continue;
-            if (!reader.IsStartElement) continue;
+            if (reader.ElementType != typeof(Row) || !reader.IsStartElement) continue;
 
             rowNum++;
             var values = ReadRowValues(reader, sst);
@@ -38,23 +37,20 @@ public sealed class ExcelReader
                 continue;
             }
 
-            if (values.Count == 0 || values.All(v => string.IsNullOrWhiteSpace(v.Value)))
-                continue;
+            if (values.Count == 0 || values.All(v => string.IsNullOrWhiteSpace(v.Value))) continue;
 
             var row = new OrigenateRow { RowNumber = rowNum };
             foreach (var (colIdx, val) in values)
             {
-                if (!headers.TryGetValue(colIdx, out var header) || string.IsNullOrWhiteSpace(header))
-                    continue;
-                if (!ColumnMap.ExcelHeaderToDataverse.TryGetValue(header, out var dvField))
-                    continue;
+                if (!headers.TryGetValue(colIdx, out var header) || string.IsNullOrWhiteSpace(header)) continue;
+                if (!ColumnMap.ExcelHeaderToDataverse.TryGetValue(header, out var dvField)) continue;
                 row.Fields[dvField] = val;
                 if (string.Equals(dvField, ColumnMap.ApplicationNumberField, StringComparison.OrdinalIgnoreCase))
                     row.ApplicationNumber = val;
             }
             yield return row;
         }
-        _log.LogInformation("ExcelReader streamed {Rows} data rows from {Path}", rowNum - 1, xlsxPath);
+        _log.LogInformation("Streamed {Rows} data rows from {Path}", rowNum - 1, xlsxPath);
     }
 
     private static Dictionary<int, string?> ReadRowValues(OpenXmlReader reader, SharedStringTable? sst)
@@ -67,10 +63,9 @@ public sealed class ExcelReader
 
             var cell = (Cell)reader.LoadCurrentElement()!;
             if (cell.CellReference?.Value is null) continue;
-
             var colIdx = ColRefToIndex(cell.CellReference!.Value!);
-            string? value = cell.CellValue?.InnerText;
 
+            string? value = cell.CellValue?.InnerText;
             if (cell.DataType?.Value == CellValues.SharedString && sst is not null
                 && int.TryParse(value, out var sIdx) && sIdx < sst.ChildElements.Count)
             {

@@ -1,14 +1,20 @@
 using System.Text;
-using OrigenateFunction.Models;
+using Azure.Storage.Blobs.Models;
+using Microsoft.Extensions.Logging;
+using OrigenateFunction.Abstractions;
 
-namespace OrigenateFunction.Services;
+namespace OrigenateFunction.Storage;
 
-public sealed class FailureWriter
+public sealed class BlobFailureFileWriter : IFailureFileWriter
 {
-    private readonly BlobService _blobs;
-    public FailureWriter(BlobService blobs) => _blobs = blobs;
+    private readonly ContainerClientFactory _containers;
+    private readonly ILogger<BlobFailureFileWriter> _log;
 
-    public sealed record FailedRow(int RowNumber, OrigenateRow Source, string Error);
+    public BlobFailureFileWriter(ContainerClientFactory containers, ILogger<BlobFailureFileWriter> log)
+    {
+        _containers = containers;
+        _log = log;
+    }
 
     public async Task WriteAsync(string sourceXlsxName, IReadOnlyList<FailedRow> failed, CancellationToken ct)
     {
@@ -40,9 +46,16 @@ public sealed class FailureWriter
             }
         }
         ms.Position = 0;
+
         var stem = Path.GetFileNameWithoutExtension(sourceXlsxName);
         var name = $"{stem}-failures-{DateTime.UtcNow:yyyyMMddHHmmss}.csv";
-        await _blobs.UploadFailureFileAsync(name, ms, "text/csv", ct);
+        var dst = _containers.Failed().GetBlobClient(name);
+        await dst.UploadAsync(ms, new BlobUploadOptions
+        {
+            HttpHeaders = new BlobHttpHeaders { ContentType = "text/csv" }
+        }, ct);
+
+        _log.LogInformation("Uploaded failure file {Name} ({Rows} rows)", name, failed.Count);
     }
 
     private static string Csv(string value)

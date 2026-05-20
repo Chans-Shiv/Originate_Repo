@@ -1,0 +1,22 @@
+{
+  "version": "2.0",
+  "logging": {
+    "applicationInsights": {
+      "samplingSettings": {
+        "isEnabled": true,
+        "excludedTypes": "Request"
+      }
+    },
+    "logLevel": {
+      "default": "Information",
+      "OrigenateFunction": "Information",
+      "Host.Aggregator": "Warning"
+    }
+  },
+  "functionTimeout": "00:30:00",
+  "extensions": {
+    "blobs": {
+      "maxDegreeOfParallelism": 1
+    }
+  }
+}

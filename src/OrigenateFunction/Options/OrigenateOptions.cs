@@ -19,7 +19,5 @@ public sealed class OrigenateOptions
 
 public sealed class BlobConnectionOptions
 {
-    public string AccountName { get; set; } = "";
-    public string BlobServiceUri { get; set; } = "";
-    public string? QueueServiceUri { get; set; }
+    public string ServiceUri { get; set; } = "";
 }

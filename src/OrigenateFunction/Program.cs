@@ -39,9 +39,9 @@ var host = new HostBuilder()
         services.AddSingleton(sp =>
         {
             var blob = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<BlobConnectionOptions>>().Value;
-            if (string.IsNullOrWhiteSpace(blob.BlobServiceUri))
-                throw new InvalidOperationException("BlobConnection__blobServiceUri is not configured.");
-            return new BlobServiceClient(new Uri(blob.BlobServiceUri), sp.GetRequiredService<TokenCredential>());
+            if (string.IsNullOrWhiteSpace(blob.ServiceUri))
+                throw new InvalidOperationException("BlobConnection__serviceUri is not configured.");
+            return new BlobServiceClient(new Uri(blob.ServiceUri), sp.GetRequiredService<TokenCredential>());
         });
 
         // Dataverse — interfaces only where there's a real reason to swap (gateway, retry policy, bulk ops)

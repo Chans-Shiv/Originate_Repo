@@ -23,8 +23,13 @@ var host = new HostBuilder()
         services.ConfigureFunctionsApplicationInsights();
 
         services.AddOptions<OrigenateOptions>().Configure<IConfiguration>((o, c) => c.Bind(o));
+        services.AddOptions<BlobConnectionOptions>()
+            .Configure<IConfiguration>((o, c) => c.GetSection("BlobConnection").Bind(o));
 
-        // Dataverse still uses interactive browser; storage now uses connection string.
+        // DefaultAzureCredential chain: with `az login` done, AzureCliCredential
+        // satisfies storage. InteractiveBrowserCredential remains as a fallback for
+        // Dataverse (different audience; AzureCliCredential covers it too when
+        // signed in to the right tenant).
         services.AddSingleton<TokenCredential>(sp =>
         {
             var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<OrigenateOptions>>().Value;
@@ -37,10 +42,10 @@ var host = new HostBuilder()
 
         services.AddSingleton(sp =>
         {
-            var cs = sp.GetRequiredService<IConfiguration>()["BlobConnection"];
-            if (string.IsNullOrWhiteSpace(cs))
-                throw new InvalidOperationException("BlobConnection is not configured.");
-            return new BlobServiceClient(cs);
+            var blob = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<BlobConnectionOptions>>().Value;
+            if (string.IsNullOrWhiteSpace(blob.ServiceUri))
+                throw new InvalidOperationException("BlobConnection__serviceUri is not configured.");
+            return new BlobServiceClient(new Uri(blob.ServiceUri), sp.GetRequiredService<TokenCredential>());
         });
 
         // Dataverse — interfaces only where there's a real reason to swap (gateway, retry policy, bulk ops)

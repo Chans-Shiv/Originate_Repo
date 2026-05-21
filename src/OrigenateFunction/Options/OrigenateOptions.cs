@@ -17,3 +17,8 @@ public sealed class OrigenateOptions
     public int MaxRetries { get; set; } = 5;
 }
 
+public sealed class BlobConnectionOptions
+{
+    public string ServiceUri { get; set; } = "";
+}
+

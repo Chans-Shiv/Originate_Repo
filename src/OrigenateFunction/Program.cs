@@ -50,24 +50,41 @@ var host = new HostBuilder()
             });
         });
 
-        // BlobServiceClient resolution: connection string takes priority (escape hatch
-        // for environments where RBAC / firewall / Conditional Access blocks AAD auth).
-        // Falls back to identity-based binding (BlobConnection__serviceUri + TokenCredential)
-        // when no connection string is provided. Production typically uses identity-based
-        // via Managed Identity on the Function App.
+        // BlobServiceClient resolution, in priority order:
+        //   1. Connection string with AccountKey  → key-auth (escape hatch for RBAC/firewall/CA blocks)
+        //   2. "UseDevelopmentStorage=true"      → Azurite local emulator
+        //   3. BlobConnection__serviceUri        → identity-based (AAD via TokenCredential)
+        // Detects unresolved placeholder text and fails fast with an actionable message.
         services.AddSingleton(sp =>
         {
             var cfg = sp.GetRequiredService<IConfiguration>();
             var cs = cfg["BlobConnection"];
+
+            if (LooksLikePlaceholder(cs))
+                throw new InvalidOperationException(
+                    "BlobConnection in local.settings.json still contains the placeholder " +
+                    "'<PASTE_STORAGE_CONNECTION_STRING_HERE>'. Replace it with a real connection " +
+                    "string, OR set it to 'UseDevelopmentStorage=true' to use Azurite.");
+
+            if (!string.IsNullOrWhiteSpace(cs) &&
+                cs.Equals("UseDevelopmentStorage=true", StringComparison.OrdinalIgnoreCase))
+                return new BlobServiceClient(cs);
+
             if (!string.IsNullOrWhiteSpace(cs) && cs.Contains("AccountKey=", StringComparison.OrdinalIgnoreCase))
                 return new BlobServiceClient(cs);
 
             var serviceUri = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<BlobConnectionOptions>>().Value.ServiceUri;
             if (string.IsNullOrWhiteSpace(serviceUri))
                 throw new InvalidOperationException(
-                    "Storage auth is not configured. Set either a flat connection string at " +
-                    "'BlobConnection' OR identity-based 'BlobConnection__serviceUri'.");
+                    "Storage auth is not configured. In local.settings.json set ONE of: " +
+                    "(a) 'BlobConnection' to a real connection string (DefaultEndpointsProtocol=...;AccountKey=...), " +
+                    "(b) 'BlobConnection' to 'UseDevelopmentStorage=true' for Azurite, " +
+                    "(c) 'BlobConnection__serviceUri' (+ '__queueServiceUri') for identity-based auth.");
             return new BlobServiceClient(new Uri(serviceUri), sp.GetRequiredService<TokenCredential>());
+
+            static bool LooksLikePlaceholder(string? value)
+                => !string.IsNullOrWhiteSpace(value)
+                   && (value.StartsWith("<", StringComparison.Ordinal) || value.Contains("PASTE_", StringComparison.OrdinalIgnoreCase));
         });
 
         // Dataverse — interfaces only where there's a real reason to swap (gateway, retry policy, bulk ops)

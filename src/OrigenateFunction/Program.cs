@@ -26,26 +26,48 @@ var host = new HostBuilder()
         services.AddOptions<BlobConnectionOptions>()
             .Configure<IConfiguration>((o, c) => c.GetSection("BlobConnection").Bind(o));
 
-        // DefaultAzureCredential chain: with `az login` done, AzureCliCredential
-        // satisfies storage. InteractiveBrowserCredential remains as a fallback for
-        // Dataverse (different audience; AzureCliCredential covers it too when
-        // signed in to the right tenant).
+        // DefaultAzureCredential chain narrowed to Az CLI + Interactive Browser only.
+        // Excluded sources frequently pick up stale tokens (old Visual Studio sign-in,
+        // shared token cache, env vars from a prior service principal) and cause
+        // 403 AuthorizationPermissionMismatch even when the *intended* account has
+        // the right RBAC roles.
         services.AddSingleton<TokenCredential>(sp =>
         {
             var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<OrigenateOptions>>().Value;
             return new DefaultAzureCredential(new DefaultAzureCredentialOptions
             {
+                ExcludeEnvironmentCredential = true,
+                ExcludeWorkloadIdentityCredential = true,
+                ExcludeManagedIdentityCredential = true,
+                ExcludeSharedTokenCacheCredential = true,
+                ExcludeVisualStudioCredential = true,
+                ExcludeVisualStudioCodeCredential = true,
+                ExcludeAzurePowerShellCredential = true,
+                ExcludeAzureDeveloperCliCredential = true,
+
                 ExcludeInteractiveBrowserCredential = !opts.UseInteractiveBrowser,
                 TenantId = string.IsNullOrWhiteSpace(opts.AzureTenantId) ? null : opts.AzureTenantId
             });
         });
 
+        // BlobServiceClient resolution: connection string takes priority (escape hatch
+        // for environments where RBAC / firewall / Conditional Access blocks AAD auth).
+        // Falls back to identity-based binding (BlobConnection__serviceUri + TokenCredential)
+        // when no connection string is provided. Production typically uses identity-based
+        // via Managed Identity on the Function App.
         services.AddSingleton(sp =>
         {
-            var blob = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<BlobConnectionOptions>>().Value;
-            if (string.IsNullOrWhiteSpace(blob.ServiceUri))
-                throw new InvalidOperationException("BlobConnection__serviceUri is not configured.");
-            return new BlobServiceClient(new Uri(blob.ServiceUri), sp.GetRequiredService<TokenCredential>());
+            var cfg = sp.GetRequiredService<IConfiguration>();
+            var cs = cfg["BlobConnection"];
+            if (!string.IsNullOrWhiteSpace(cs) && cs.Contains("AccountKey=", StringComparison.OrdinalIgnoreCase))
+                return new BlobServiceClient(cs);
+
+            var serviceUri = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<BlobConnectionOptions>>().Value.ServiceUri;
+            if (string.IsNullOrWhiteSpace(serviceUri))
+                throw new InvalidOperationException(
+                    "Storage auth is not configured. Set either a flat connection string at " +
+                    "'BlobConnection' OR identity-based 'BlobConnection__serviceUri'.");
+            return new BlobServiceClient(new Uri(serviceUri), sp.GetRequiredService<TokenCredential>());
         });
 
         // Dataverse — interfaces only where there's a real reason to swap (gateway, retry policy, bulk ops)

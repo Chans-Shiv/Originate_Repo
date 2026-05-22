@@ -4,6 +4,7 @@ obj/
 *.suo
 .vs/
 .vscode/
+local.settings.json
 *.pubxml.user
 .claude/
 

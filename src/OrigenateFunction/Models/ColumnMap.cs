@@ -5,7 +5,7 @@ namespace OrigenateFunction.Models;
 // search/replace once known. All logical names below are formed from PublisherPrefix.
 public static class ColumnMap
 {
-    public const string PublisherPrefix = "new_";
+    public const string PublisherPrefix = "dmt_";
 
     public const string StgOrigenateEntityLogical = PublisherPrefix + "stg_origenate";
     public const string StgOrigenateEntitySet = PublisherPrefix + "stg_origenates";

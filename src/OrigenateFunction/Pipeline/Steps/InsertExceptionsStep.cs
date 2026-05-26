@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Xrm.Sdk;
 using OrigenateFunction.Abstractions;
+using OrigenateFunction.Mappers;
 using OrigenateFunction.Options;
 using OrigenateFunction.Repositories;
 
@@ -9,15 +11,16 @@ namespace OrigenateFunction.Pipeline.Steps;
 public sealed class InsertExceptionsStep : IPipelineStep
 {
     private readonly ExceptionsRepository _exceptions;
+    private readonly EntityBuilder _builder;
     private readonly OrigenateOptions _opts;
     private readonly ILogger<InsertExceptionsStep> _log;
 
     public InsertExceptionsStep(
-        ExceptionsRepository exceptions,
+        ExceptionsRepository exceptions, EntityBuilder builder,
         IOptions<OrigenateOptions> opts,
         ILogger<InsertExceptionsStep> log)
     {
-        _exceptions = exceptions; _opts = opts.Value; _log = log;
+        _exceptions = exceptions; _builder = builder; _opts = opts.Value; _log = log;
     }
 
     public string Name => "Insert STG_ORIGENATE_EXCEPTIONS";
@@ -38,7 +41,9 @@ public sealed class InsertExceptionsStep : IPipelineStep
         {
             batchNum++;
             var slice = ctx.Exceptions.Skip(i).Take(_opts.InsertBatchSize).ToArray();
-            var chunk = slice.Select(e => e.ToDataverseEntity()).ToArray();
+            var chunk = new Entity[slice.Length];
+            for (int j = 0; j < slice.Length; j++)
+                chunk[j] = await _builder.BuildExceptionRowAsync(slice[j], ct);
 
             _log.LogInformation("EventName=InsertExceptionsBatchStart Batch={Batch} Rows={Rows}",
                 batchNum, chunk.Length);

@@ -101,11 +101,14 @@ var host = new HostBuilder()
         // Dataverse — ServiceClient SDK with cached token + Polly resilience pipeline.
         services.AddSingleton<DataverseConnectionFactory>();
         services.AddSingleton<DataverseResiliencePipeline>();
+        services.AddSingleton<DataverseSchemaCache>();
+        services.AddSingleton<AttributeCoercer>();
         services.AddSingleton<IBulkWriter, BulkWriter>();
         services.AddSingleton<IBulkDeleter, BulkDeleter>();
         services.AddSingleton<IPagedReader, PagedReader>();
         services.AddSingleton<DataverseConnectivityCheck>();
         services.AddSingleton<EntityProjector>();
+        services.AddSingleton<EntityBuilder>();
 
         services.AddSingleton<StgOrigenateRepository>();
         services.AddSingleton<HoldingRepository>();
@@ -122,6 +125,7 @@ var host = new HostBuilder()
         // Pipeline steps (order = registration order)
         services.AddSingleton<IPipelineStep, DownloadBlobStep>();
         services.AddSingleton<IPipelineStep, ConnectDataverseStep>();
+        services.AddSingleton<IPipelineStep, LoadSchemaStep>();
         services.AddSingleton<IPipelineStep, ClearHoldingStep>();
         services.AddSingleton<IPipelineStep, BackupOldRowsStep>();
         services.AddSingleton<IPipelineStep, TruncateStgStep>();

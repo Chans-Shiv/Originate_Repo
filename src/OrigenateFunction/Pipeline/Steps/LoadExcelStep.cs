@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.Xrm.Sdk;
 using OrigenateFunction.Abstractions;
 using OrigenateFunction.Excel;
+using OrigenateFunction.Mappers;
 using OrigenateFunction.Models;
 using OrigenateFunction.Options;
 using OrigenateFunction.Repositories;
@@ -13,14 +14,15 @@ public sealed class LoadExcelStep : IPipelineStep
 {
     private readonly OpenXmlExcelReader _excel;
     private readonly StgOrigenateRepository _stg;
+    private readonly EntityBuilder _builder;
     private readonly OrigenateOptions _opts;
     private readonly ILogger<LoadExcelStep> _log;
 
     public LoadExcelStep(
-        OpenXmlExcelReader excel, StgOrigenateRepository stg,
+        OpenXmlExcelReader excel, StgOrigenateRepository stg, EntityBuilder builder,
         IOptions<OrigenateOptions> opts, ILogger<LoadExcelStep> log)
     {
-        _excel = excel; _stg = stg; _opts = opts.Value; _log = log;
+        _excel = excel; _stg = stg; _builder = builder; _opts = opts.Value; _log = log;
     }
 
     public string Name => "Stream Excel → STG (collect exceptions + per-row failures)";
@@ -81,7 +83,10 @@ public sealed class LoadExcelStep : IPipelineStep
         {
             _log.LogInformation("EventName=LoadExcelBatchStart Batch={Batch} Rows={Rows}", batchNum, rows.Length);
 
-            var entities = rows.Select(r => r.ToDataverseEntity()).ToArray();
+            var entities = new Entity[rows.Length];
+            for (int i = 0; i < rows.Length; i++)
+                entities[i] = await _builder.BuildOrigenateRowAsync(rows[i], _stg.EntityLogicalName, ct);
+
             var results = await _stg.InsertManyAsync(entities, ct);
 
             var newFailures = 0;

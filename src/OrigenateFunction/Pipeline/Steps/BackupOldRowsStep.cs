@@ -31,8 +31,9 @@ public sealed class BackupOldRowsStep : IPipelineStep
     public async Task ExecuteAsync(PipelineContext ctx, CancellationToken ct)
     {
         var cutoff = DateTime.UtcNow.AddMonths(-_opts.AgeThresholdMonths);
+        // "13 months or more old" → createdon ≤ (now − 13 months)
         var filter = new FilterExpression();
-        filter.Conditions.Add(new ConditionExpression("createdon", ConditionOperator.LessThan, cutoff));
+        filter.Conditions.Add(new ConditionExpression("createdon", ConditionOperator.LessEqual, cutoff));
 
         _log.LogInformation("EventName=BackupStart Cutoff={Cutoff:o} AgeMonths={Months} Parallel={Par}",
             cutoff, _opts.AgeThresholdMonths, _opts.MaxParallelBatches);

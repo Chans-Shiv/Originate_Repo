@@ -19,6 +19,13 @@ public interface IBulkWriter
 public interface IBulkDeleter
 {
     Task DeleteBatchAsync(string entityLogicalName, IReadOnlyList<Guid> ids, CancellationToken ct);
+
+    // Submits a Dataverse BulkDeleteRequest (server-side async job) for every row
+    // matching the filter, polls until the AsyncOperation completes, and throws if
+    // the job fails or the timeout elapses. Use this for tables with row counts
+    // above the configured threshold; below that, prefer DeleteBatchAsync.
+    Task SubmitAndAwaitBulkDeleteAsync(
+        string entityLogicalName, FilterExpression? filter, CancellationToken ct);
 }
 
 public interface IPagedReader

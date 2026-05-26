@@ -1,49 +1,28 @@
 namespace OrigenateFunction.Models;
 
 // Single source of truth for table + column names.
-// TODO(user): replace PublisherPrefix "new_" with the real prefix via project-wide
-// search/replace once known. All logical names below are formed from PublisherPrefix.
 public static class ColumnMap
 {
     public const string PublisherPrefix = "dmt_";
 
-    public const string StgOrigenateEntityLogical = PublisherPrefix + "stg_origenate";
-    public const string StgOrigenateEntitySet = PublisherPrefix + "stg_origenates";
-    public const string HoldingEntityLogical = PublisherPrefix + "stg_origenate_holding";
-    public const string HoldingEntitySet = PublisherPrefix + "stg_origenate_holdings";
-    public const string ExceptionsEntityLogical = PublisherPrefix + "stg_origenate_exception";
-    public const string ExceptionsEntitySet = PublisherPrefix + "stg_origenate_exceptions";
+    // STG_ORIGENATE is named "loanapplication" in Dataverse; HOLDING + EXCEPTIONS keep
+    // the stg_origenate_* naming. EntitySet (plural) values are Dataverse's default
+    // pluralization and should be verified against the EntityDefinitions metadata.
+    public const string StgOrigenateEntityLogical = PublisherPrefix + "loanapplication";
+    public const string StgOrigenateEntitySet     = PublisherPrefix + "loanapplications";
+    public const string HoldingEntityLogical      = PublisherPrefix + "stg_origenate_holding_table";
+    public const string HoldingEntitySet          = PublisherPrefix + "stg_origenate_holding_tables";
+    public const string ExceptionsEntityLogical   = PublisherPrefix + "stg_origenate_exceptions";
+    public const string ExceptionsEntitySet       = PublisherPrefix + "stg_origenate_exceptionses";
 
-    public const string StgOrigenatePrimaryId = PublisherPrefix + "stg_origenateid";
-    public const string HoldingPrimaryId = PublisherPrefix + "stg_origenate_holdingid";
-    public const string ExceptionsPrimaryId = PublisherPrefix + "stg_origenate_exceptionid";
+    public const string StgOrigenatePrimaryId = PublisherPrefix + "loanapplicationid";
+    public const string HoldingPrimaryId      = PublisherPrefix + "stg_origenate_holding_tableid";
+    public const string ExceptionsPrimaryId   = PublisherPrefix + "stg_origenate_exceptionsid";
 
-    public const string ApplicationNumberField = PublisherPrefix + "applicationnumber";
-    public const string PolicyExceptionsField = PublisherPrefix + "policyexceptions";
-    public const string PolicyExceptionsReasonField = PublisherPrefix + "policyexceptionsreason";
+    public const string ApplicationNumberField       = PublisherPrefix + "applicationnumber";
+    public const string PolicyExceptionsField        = PublisherPrefix + "policyexception";
+    public const string PolicyExceptionsReasonField  = PublisherPrefix + "policyexceptionreason";
 
-    // TODO(user): once Dataverse column types are confirmed, add per-column coercion
-    //             in OrigenateRow.ToDataverseEntity(). Today every value is sent as
-    //             a string; Dataverse will accept ISO-formatted dates and numeric strings,
-    //             but will reject OptionSet / Boolean / Lookup columns sent as text.
-    // Likely typed columns (review when schema is known):
-    //   Dates:    B1DateOfBirth, B2DateOfBirth, B1EmplStartDate, B2EmplStartDate,
-    //             DateApplication, DateBooked, DateClosed, ModificationDate, FundDate,
-    //             DecisionDate
-    //   Numeric:  AnnualIncome, AppraisedValue, AprActualRate, LoanRate,
-    //             AprPromotionalRate, RateSheetRate, B1CreditScore, B2CreditScore,
-    //             B1Income, B2Income, CollateralValue, MonthlyDebt, Dti, LoanTerm,
-    //             AmountRequested, AmountApproved, AmountFinanced, LoanLineCreditLimit,
-    //             TotalSalePrice, TotalApplicants, ExistingLienBalances, LoanToValue,
-    //             DecisionedCltv, ContractCltv,
-    //             B1/B2 LengthEmployedMonths/Years, B1/B2 PrevEmployMonths/Years,
-    //             B1/B2 EmployerCount
-    //   Boolean:  EmployeeLoan, MdLoan, B1IncVerifFlg, B2IncVerifFlg,
-    //             B1SelfEmployed, B2SelfEmployed, PricingOverride
-    //   OptionSet (probably): AccountType, BookingStatus, ApplicationDecision,
-    //                          OccupancyCode, ResidenceType, PropertyType, LienPosition,
-    //                          LoanPurpose, Program, ClientStatus, AppraisalTypeName,
-    //                          B1IncVerifMethod, B2IncVerifMethod
     public static readonly IReadOnlyDictionary<string, string> ExcelHeaderToDataverse =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -53,50 +32,50 @@ public static class ColumnMap
             { "ApplicationDecision", PublisherPrefix + "applicationdecision" },
             { "BookingStatus", PublisherPrefix + "bookingstatus" },
             { "ApplicationNumber", ApplicationNumberField },
-            { "AppraisalTypeName", PublisherPrefix + "appraisaltypename" },
+            { "AppraisalTypeName", PublisherPrefix + "appraisaltype" },
             { "AppraisedValue", PublisherPrefix + "appraisedvalue" },
-            { "ApprovingLastOfficerAssociateId", PublisherPrefix + "approvinglastofficerassociateid" },
-            { "ApprovingLastOfficerLocation", PublisherPrefix + "approvinglastofficerlocation" },
-            { "ApprovingLastOfficerName", PublisherPrefix + "approvinglastofficername" },
+            { "ApprovingLastOfficerAssociateId", PublisherPrefix + "approvingofficerassociateid" },
+            { "ApprovingLastOfficerLocation", PublisherPrefix + "approvingofficerlocation" },
+            { "ApprovingLastOfficerName", PublisherPrefix + "approvingofficername" },
             { "AprActualRate", PublisherPrefix + "apractualrate" },
             { "LoanRate", PublisherPrefix + "loanrate" },
             { "AprPromotionalRate", PublisherPrefix + "aprpromotionalrate" },
             { "RateSheetRate", PublisherPrefix + "ratesheetrate" },
-            { "B1EmployerCount", PublisherPrefix + "b1employercount" },
-            { "B1CreditScore", PublisherPrefix + "b1creditscore" },
-            { "B1EmplStartDate", PublisherPrefix + "b1emplstartdate" },
-            { "B1DateOfBirth", PublisherPrefix + "b1dateofbirth" },
-            { "B1EmployerName", PublisherPrefix + "b1employername" },
-            { "B1Income", PublisherPrefix + "b1income" },
-            { "B1IncVerifFlg", PublisherPrefix + "b1incverifflg" },
-            { "B1IncVerifMethod", PublisherPrefix + "b1incverifmethod" },
-            { "B1LengthEmployedMonths", PublisherPrefix + "b1lengthemployedmonths" },
-            { "B1LengthEmployedYears", PublisherPrefix + "b1lengthemployedyears" },
-            { "B1Name", PublisherPrefix + "b1name" },
-            { "B1OccupationTitle", PublisherPrefix + "b1occupationtitle" },
-            { "B1PrevEmployMonths", PublisherPrefix + "b1prevemploymonths" },
-            { "B1PrevEmployYears", PublisherPrefix + "b1prevemployyears" },
-            { "B1SelfEmployed", PublisherPrefix + "b1selfemployed" },
-            { "B1Ssn", PublisherPrefix + "b1ssn" },
-            { "B2EmployerCount", PublisherPrefix + "b2employercount" },
-            { "B2CreditScore", PublisherPrefix + "b2creditscore" },
-            { "B2EmplStartDate", PublisherPrefix + "b2emplstartdate" },
-            { "B2DateOfBirth", PublisherPrefix + "b2dateofbirth" },
-            { "B2EmployerName", PublisherPrefix + "b2employername" },
-            { "B2Income", PublisherPrefix + "b2income" },
-            { "B2IncVerifFlg", PublisherPrefix + "b2incverifflg" },
-            { "B2IncVerifMethod", PublisherPrefix + "b2incverifmethod" },
-            { "B2LengthEmployedMonths", PublisherPrefix + "b2lengthemployedmonths" },
-            { "B2LengthEmployedYears", PublisherPrefix + "b2lengthemployedyears" },
-            { "B2Name", PublisherPrefix + "b2name" },
-            { "B2OccupationTitle", PublisherPrefix + "b2occupationtitle" },
-            { "B2PrevEmployMonths", PublisherPrefix + "b2prevemploymonths" },
-            { "B2PrevEmployYears", PublisherPrefix + "b2prevemployyears" },
-            { "B2SelfEmployed", PublisherPrefix + "b2selfemployed" },
-            { "B2Ssn", PublisherPrefix + "b2ssn" },
+            { "B1EmployerCount", PublisherPrefix + "employercountb1" },
+            { "B1CreditScore", PublisherPrefix + "creditscoreb1" },
+            { "B1EmplStartDate", PublisherPrefix + "employmentstartdateb1" },
+            { "B1DateOfBirth", PublisherPrefix + "dateofbirthb1" },
+            { "B1EmployerName", PublisherPrefix + "employernameb1" },
+            { "B1Income", PublisherPrefix + "incomeb1" },
+            { "B1IncVerifFlg", PublisherPrefix + "incomeverificationflagb1" },
+            { "B1IncVerifMethod", PublisherPrefix + "incomeverificationmethodb1" },
+            { "B1LengthEmployedMonths", PublisherPrefix + "employmentlengthmonthsb1" },
+            { "B1LengthEmployedYears", PublisherPrefix + "employmentlengthyearsb1" },
+            { "B1Name", PublisherPrefix + "nameb1" },
+            { "B1OccupationTitle", PublisherPrefix + "occupationtitleb1" },
+            { "B1PrevEmployMonths", PublisherPrefix + "previousemploymentmonthsb1" },
+            { "B1PrevEmployYears", PublisherPrefix + "previousemploymentyearsb1" },
+            { "B1SelfEmployed", PublisherPrefix + "selfemployedb1" },
+            { "B1Ssn", PublisherPrefix + "ssnb1" },
+            { "B2EmployerCount", PublisherPrefix + "employercountb2" },
+            { "B2CreditScore", PublisherPrefix + "creditscoreb2" },
+            { "B2EmplStartDate", PublisherPrefix + "employmentstartdateb2" },
+            { "B2DateOfBirth", PublisherPrefix + "dateofbirthb2" },
+            { "B2EmployerName", PublisherPrefix + "employernameb2" },
+            { "B2Income", PublisherPrefix + "incomeb2" },
+            { "B2IncVerifFlg", PublisherPrefix + "incomeverificationflagb2" },
+            { "B2IncVerifMethod", PublisherPrefix + "incomeverificationmethodb2" },
+            { "B2LengthEmployedMonths", PublisherPrefix + "employmentlengthmonthsb2" },
+            { "B2LengthEmployedYears", PublisherPrefix + "employmentlengthyearsb2" },
+            { "B2Name", PublisherPrefix + "nameb2" },
+            { "B2OccupationTitle", PublisherPrefix + "occupationtitleb2" },
+            { "B2PrevEmployMonths", PublisherPrefix + "previousemploymentmonthsb2" },
+            { "B2PrevEmployYears", PublisherPrefix + "previousemploymentyearsb2" },
+            { "B2SelfEmployed", PublisherPrefix + "selfemployedb2" },
+            { "B2Ssn", PublisherPrefix + "ssnb2" },
             { "ClosingOfficerAssociateId", PublisherPrefix + "closingofficerassociateid" },
             { "ClosingOfficerName", PublisherPrefix + "closingofficername" },
-            { "LoanToValue", PublisherPrefix + "loantovalue" },
+            { "LoanToValue", PublisherPrefix + "loantovalueratio" },
             { "DecisionedCltv", PublisherPrefix + "decisionedcltv" },
             { "ContractCltv", PublisherPrefix + "contractcltv" },
             { "CollateralDescription", PublisherPrefix + "collateraldescription" },
@@ -107,28 +86,28 @@ public static class ColumnMap
             { "CollateralStreetAddress", PublisherPrefix + "collateralstreetaddress" },
             { "CollateralZip", PublisherPrefix + "collateralzip" },
             { "CostCenterNumber", PublisherPrefix + "costcenternumber" },
-            { "DateApplication", PublisherPrefix + "dateapplication" },
-            { "DateBooked", PublisherPrefix + "datebooked" },
-            { "DateClosed", PublisherPrefix + "dateclosed" },
+            { "DateApplication", PublisherPrefix + "applicationdate" },
+            { "DateBooked", PublisherPrefix + "bookingdate" },
+            { "DateClosed", PublisherPrefix + "closingdate" },
             { "ModificationDate", PublisherPrefix + "modificationdate" },
             { "MonthlyDebt", PublisherPrefix + "monthlydebt" },
-            { "Dti", PublisherPrefix + "dti" },
-            { "EmployeeLoan", PublisherPrefix + "employeeloan" },
+            { "Dti", PublisherPrefix + "debttoincomeratio" },
+            { "EmployeeLoan", PublisherPrefix + "employeeloanflag" },
             { "LienHolder", PublisherPrefix + "lienholder" },
             { "LienPosition", PublisherPrefix + "lienposition" },
             { "LoanPurpose", PublisherPrefix + "loanpurpose" },
-            { "LoanTerm", PublisherPrefix + "loanterm" },
+            { "LoanTerm", PublisherPrefix + "loantermmonths" },
             { "FundDate", PublisherPrefix + "funddate" },
             { "AmountRequested", PublisherPrefix + "amountrequested" },
             { "AmountApproved", PublisherPrefix + "amountapproved" },
             { "AmountFinanced", PublisherPrefix + "amountfinanced" },
             { "LoanLineCreditLimit", PublisherPrefix + "loanlinecreditlimit" },
-            { "Program", PublisherPrefix + "program" },
+            { "Program", PublisherPrefix + "loanprogram" },
             { "MailingAddress", PublisherPrefix + "mailingaddress" },
             { "MailingCity", PublisherPrefix + "mailingcity" },
             { "MailingState", PublisherPrefix + "mailingstate" },
             { "MailingZip", PublisherPrefix + "mailingzip" },
-            { "MdLoan", PublisherPrefix + "mdloan" },
+            { "MdLoan", PublisherPrefix + "mdloanflag" },
             { "MonthKey", PublisherPrefix + "monthkey" },
             { "YearKey", PublisherPrefix + "yearkey" },
             { "OccupancyCode", PublisherPrefix + "occupancycode" },

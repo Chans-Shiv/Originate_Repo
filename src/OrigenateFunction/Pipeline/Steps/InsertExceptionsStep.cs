@@ -24,28 +24,34 @@ public sealed class InsertExceptionsStep : IPipelineStep
 
     public async Task ExecuteAsync(PipelineContext ctx, CancellationToken ct)
     {
-        if (ctx.Exceptions.Count == 0) { _log.LogInformation("InsertExceptions ✓ nothing to insert"); return; }
+        if (ctx.Exceptions.Count == 0)
+        {
+            _log.LogInformation("EventName=InsertExceptions Total=0");
+            return;
+        }
 
-        _log.LogInformation("InsertExceptions ▶ {Total} rows in batches of {Size}",
+        _log.LogInformation("EventName=InsertExceptionsStart Total={Total} BatchSize={Size}",
             ctx.Exceptions.Count, _opts.InsertBatchSize);
 
         int batchNum = 0, totalFailures = 0;
         for (int i = 0; i < ctx.Exceptions.Count; i += _opts.InsertBatchSize)
         {
             batchNum++;
-            var chunk = ctx.Exceptions.Skip(i).Take(_opts.InsertBatchSize)
-                .Select(e => e.ToDataverseEntity()).ToArray();
-            _log.LogInformation("InsertExceptions: batch {Batch} ({Rows} rows)", batchNum, chunk.Length);
+            var slice = ctx.Exceptions.Skip(i).Take(_opts.InsertBatchSize).ToArray();
+            var chunk = slice.Select(e => e.ToDataverseEntity()).ToArray();
+
+            _log.LogInformation("EventName=InsertExceptionsBatchStart Batch={Batch} Rows={Rows}",
+                batchNum, chunk.Length);
             var res = await _exceptions.InsertManyAsync(chunk, ct);
             for (int j = 0; j < chunk.Length; j++)
                 if (!res[j].Success)
                 {
                     totalFailures++;
-                    _log.LogWarning("InsertExceptions failed app# {App}: {Err}",
-                        ctx.Exceptions[i + j].ApplicationNumber, res[j].Error);
+                    _log.LogWarning("EventName=InsertExceptionFailure App={App} Error={Err}",
+                        slice[j].ApplicationNumber, res[j].Error);
                 }
         }
-        _log.LogInformation("InsertExceptions ✓ {Total} attempted, {Failed} failures",
+        _log.LogInformation("EventName=InsertExceptions Total={Total} Failed={Failed}",
             ctx.Exceptions.Count, totalFailures);
     }
 }

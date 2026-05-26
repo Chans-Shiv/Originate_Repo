@@ -18,8 +18,8 @@ public sealed class TruncateStgStep : IPipelineStep
 
     public async Task ExecuteAsync(PipelineContext ctx, CancellationToken ct)
     {
-        _log.LogInformation("TruncateStg ▶ entitySet={EntitySet}", _stg.EntitySet);
+        _log.LogInformation("EventName=TruncateStgStart Entity={Logical}", _stg.EntityLogicalName);
         await _stg.TruncateAsync(ct);
-        _log.LogInformation("TruncateStg ✓");
+        _log.LogInformation("EventName=TruncateStg");
     }
 }

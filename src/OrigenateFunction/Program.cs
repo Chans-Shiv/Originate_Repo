@@ -87,16 +87,14 @@ var host = new HostBuilder()
                    && (value.StartsWith("<", StringComparison.Ordinal) || value.Contains("PASTE_", StringComparison.OrdinalIgnoreCase));
         });
 
-        // Dataverse — interfaces only where there's a real reason to swap (gateway, retry policy, bulk ops)
-        services.AddHttpClient<IDataverseGateway, DataverseGateway>();
-        services.AddSingleton<IDataverseTokenProvider, DataverseTokenProvider>();
-        services.AddSingleton<HttpRequestFactory>();
-        services.AddSingleton<IHttpRetryPolicy, ExponentialBackoffRetryPolicy>();
+        // Dataverse — ServiceClient SDK with cached token + Polly resilience pipeline.
+        services.AddSingleton<DataverseConnectionFactory>();
+        services.AddSingleton<DataverseResiliencePipeline>();
         services.AddSingleton<IBulkWriter, BulkWriter>();
         services.AddSingleton<IBulkDeleter, BulkDeleter>();
         services.AddSingleton<IPagedReader, PagedReader>();
         services.AddSingleton<DataverseConnectivityCheck>();
-        services.AddSingleton<JsonRowMapper>();
+        services.AddSingleton<EntityProjector>();
 
         services.AddSingleton<StgOrigenateRepository>();
         services.AddSingleton<HoldingRepository>();

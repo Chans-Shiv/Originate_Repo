@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Query;
 using OrigenateFunction.Abstractions;
 using OrigenateFunction.Mappers;
 using OrigenateFunction.Models;
@@ -12,40 +14,43 @@ public sealed class BackupOldRowsStep : IPipelineStep
 {
     private readonly StgOrigenateRepository _stg;
     private readonly HoldingRepository _holding;
-    private readonly JsonRowMapper _mapper;
+    private readonly EntityProjector _projector;
     private readonly OrigenateOptions _opts;
     private readonly ILogger<BackupOldRowsStep> _log;
 
     public BackupOldRowsStep(
         StgOrigenateRepository stg, HoldingRepository holding,
-        JsonRowMapper mapper, IOptions<OrigenateOptions> opts,
+        EntityProjector projector, IOptions<OrigenateOptions> opts,
         ILogger<BackupOldRowsStep> log)
     {
-        _stg = stg; _holding = holding; _mapper = mapper; _opts = opts.Value; _log = log;
+        _stg = stg; _holding = holding; _projector = projector; _opts = opts.Value; _log = log;
     }
 
-    public string Name => $"Backup rows older than {ColumnMap.StgBusinessFields.Count} fields × {13}mo to HOLDING";
+    public string Name => $"Backup rows older than {_opts.AgeThresholdMonths}mo to HOLDING";
 
     public async Task ExecuteAsync(PipelineContext ctx, CancellationToken ct)
     {
-        var cutoff = DateTimeOffset.UtcNow.AddMonths(-_opts.AgeThresholdMonths).ToString("o");
-        var filter = $"createdon lt {cutoff}";
+        var cutoff = DateTime.UtcNow.AddMonths(-_opts.AgeThresholdMonths);
+        var filter = new FilterExpression();
+        filter.Conditions.Add(new ConditionExpression("createdon", ConditionOperator.LessThan, cutoff));
 
-        _log.LogInformation("BackupOldRows ▶ filter='{Filter}' (age threshold={Months} months)",
-            filter, _opts.AgeThresholdMonths);
+        _log.LogInformation("EventName=BackupStart Cutoff={Cutoff:o} AgeMonths={Months} Parallel={Par}",
+            cutoff, _opts.AgeThresholdMonths, _opts.MaxParallelBatches);
 
-        var buffer = new List<IDictionary<string, object?>>(_opts.InsertBatchSize);
+        using var sem = new SemaphoreSlim(_opts.MaxParallelBatches, _opts.MaxParallelBatches);
+        var inFlight = new List<Task<int>>();
+        var buffer = new List<Entity>(_opts.InsertBatchSize);
         long total = 0;
-        int batchNum = 0, totalFailures = 0;
+        int batchNum = 0;
 
         await foreach (var item in _stg.StreamAsync(filter, ColumnMap.StgBusinessFields, ct))
         {
-            buffer.Add(_mapper.MapJsonToRecord(item, ColumnMap.StgBusinessFields));
+            buffer.Add(_projector.Project(item, _holding.EntityLogicalName, ColumnMap.StgBusinessFields));
             if (buffer.Count >= _opts.InsertBatchSize)
             {
                 batchNum++;
                 total += buffer.Count;
-                totalFailures += await FlushAsync(buffer, batchNum, total, ct);
+                inFlight.Add(FlushAsync(buffer.ToArray(), batchNum, total, sem, ct));
                 buffer.Clear();
             }
         }
@@ -53,30 +58,35 @@ public sealed class BackupOldRowsStep : IPipelineStep
         {
             batchNum++;
             total += buffer.Count;
-            totalFailures += await FlushAsync(buffer, batchNum, total, ct);
+            inFlight.Add(FlushAsync(buffer.ToArray(), batchNum, total, sem, ct));
         }
-        _log.LogInformation("BackupOldRows ✓ {Total} rows queued ({Batches} batches), {Failed} insert failures",
+        var allFailures = await Task.WhenAll(inFlight);
+        var totalFailures = allFailures.Sum();
+        _log.LogInformation("EventName=Backup Total={Total} Batches={Batches} Failed={Failed}",
             total, batchNum, totalFailures);
     }
 
-    private async Task<int> FlushAsync(List<IDictionary<string, object?>> buffer, int batchNum, long runningTotal, CancellationToken ct)
+    private async Task<int> FlushAsync(Entity[] buffer, int batchNum, long runningTotal, SemaphoreSlim sem, CancellationToken ct)
     {
-        _log.LogInformation("BackupOldRows: inserting batch {Batch} ({Rows} rows → HOLDING, running total {Total})",
-            batchNum, buffer.Count, runningTotal);
-        var results = await _holding.InsertManyAsync(buffer, ct);
-        var failed = 0;
-        string? firstErr = null;
-        foreach (var r in results)
+        await sem.WaitAsync(ct);
+        try
         {
-            if (!r.Success)
+            _log.LogInformation("EventName=BackupBatchStart Batch={Batch} Rows={Rows} Running={Total}",
+                batchNum, buffer.Length, runningTotal);
+            var results = await _holding.InsertManyAsync(buffer, ct);
+            var failed = 0;
+            string? firstErr = null;
+            foreach (var r in results)
             {
-                failed++;
-                firstErr ??= r.Error;
+                if (!r.Success) { failed++; firstErr ??= r.Error; }
             }
+            if (failed > 0)
+                _log.LogError("EventName=BackupBatchPartial Batch={Batch} Failed={Failed}/{Total} FirstError={Err}",
+                    batchNum, failed, buffer.Length, firstErr);
+            else
+                _log.LogInformation("EventName=BackupBatch Batch={Batch} Rows={Count} Failed=0", batchNum, buffer.Length);
+            return failed;
         }
-        if (failed > 0)
-            _log.LogError("BackupOldRows batch {Batch} had {Failed}/{Total} HOLDING insert failures. First error: {Err}",
-                batchNum, failed, buffer.Count, firstErr);
-        return failed;
+        finally { sem.Release(); }
     }
 }

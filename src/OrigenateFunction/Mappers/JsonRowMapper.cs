@@ -1,18 +1,20 @@
-using System.Text.Json;
+using Microsoft.Xrm.Sdk;
 
 namespace OrigenateFunction.Mappers;
 
-public sealed class JsonRowMapper
+// Projects an Entity from one logical table to another by copying the requested attributes.
+// Used to copy business fields from STG → HOLDING during the backup step.
+public sealed class EntityProjector
 {
-    public IDictionary<string, object?> MapJsonToRecord(JsonElement source, IEnumerable<string> fields)
+    public Entity Project(Entity source, string targetLogicalName, IEnumerable<string> fields)
     {
-        var rec = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        var e = new Entity(targetLogicalName);
         foreach (var f in fields)
-            if (source.TryGetProperty(f, out var el) && el.ValueKind != JsonValueKind.Null)
-                rec[f] = el.ValueKind == JsonValueKind.String ? el.GetString() : el.GetRawText();
-        return rec;
+            if (source.Contains(f) && source[f] is not null)
+                e[f] = source[f];
+        return e;
     }
 
-    public string? ExtractString(JsonElement source, string field)
-        => source.TryGetProperty(field, out var el) && el.ValueKind == JsonValueKind.String ? el.GetString() : null;
+    public string? ExtractString(Entity source, string field)
+        => source.Contains(field) ? source[field]?.ToString() : null;
 }

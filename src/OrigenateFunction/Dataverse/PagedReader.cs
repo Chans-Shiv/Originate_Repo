@@ -1,94 +1,100 @@
 using System.Runtime.CompilerServices;
-using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Messages;
+using Microsoft.Xrm.Sdk.Query;
 using OrigenateFunction.Abstractions;
 
 namespace OrigenateFunction.Dataverse;
 
 public sealed class PagedReader : IPagedReader
 {
-    private readonly IDataverseGateway _gw;
+    private readonly DataverseConnectionFactory _factory;
+    private readonly DataverseResiliencePipeline _resilience;
     private readonly ILogger<PagedReader> _log;
 
-    public PagedReader(IDataverseGateway gw, ILogger<PagedReader> log)
+    public PagedReader(
+        DataverseConnectionFactory factory,
+        DataverseResiliencePipeline resilience,
+        ILogger<PagedReader> log)
     {
-        _gw = gw;
+        _factory = factory;
+        _resilience = resilience;
         _log = log;
     }
 
-    public async IAsyncEnumerable<JsonElement> RetrieveAllAsync(
-        string entitySet, string? filter, IEnumerable<string> select, int pageSize,
+    public async IAsyncEnumerable<Entity> RetrieveAllAsync(
+        QueryExpression query,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
-        var url = $"{entitySet}?$select={string.Join(",", select)}";
-        if (!string.IsNullOrWhiteSpace(filter))
-            url += $"&$filter={Uri.EscapeDataString(filter)}";
+        var logical = query.EntityName;
+        var page = 0;
+        long total = 0;
 
-        _log.LogInformation("RetrieveAll → GET {Url} (pageSize={Page})", url, pageSize);
+        _log.LogInformation("EventName=RetrieveAllStart Entity={Logical} PageSize={PageSize}",
+            logical, query.PageInfo?.Count ?? 0);
 
-        long page = 0, totalRows = 0;
-        while (!string.IsNullOrEmpty(url))
+        while (true)
         {
             page++;
-            using var req = await _gw.CreateAuthorizedRequestAsync(HttpMethod.Get, url, ct);
-            req.Headers.Add("Prefer", $"odata.maxpagesize={pageSize}");
-            using var res = await _gw.SendAsync(req, ct);
-            if (!res.IsSuccessStatusCode)
+            EntityCollection? coll = null;
+            await _resilience.Pipeline.ExecuteAsync(async token =>
             {
-                var errBody = await res.Content.ReadAsStringAsync(ct);
-                _log.LogError("RetrieveAll ✗ GET {Url} {Status}. Body: {Body}",
-                    url, (int)res.StatusCode, Truncate(errBody, 1000));
-                res.EnsureSuccessStatusCode();
-            }
-            var body = await res.Content.ReadAsStringAsync(ct);
-            using var doc = JsonDocument.Parse(body);
-            long pageRows = 0;
-            foreach (var item in doc.RootElement.GetProperty("value").EnumerateArray())
-            {
-                pageRows++;
-                yield return item.Clone();
-            }
-            totalRows += pageRows;
-            url = doc.RootElement.TryGetProperty("@odata.nextLink", out var nl)
-                ? AbsoluteToRelative(nl.GetString(), _gw.BaseAddress) : null;
-            _log.LogInformation("RetrieveAll page {Page}: {Rows} rows (running total {Total}, hasNext={HasNext})",
-                page, pageRows, totalRows, !string.IsNullOrEmpty(url));
+                coll = await _factory.Client.RetrieveMultipleAsync(query, token);
+            }, ct);
+            if (coll is null) break;
+
+            total += coll.Entities.Count;
+            _log.LogInformation(
+                "EventName=RetrieveAllPage Entity={Logical} Page={Page} Rows={Rows} Total={Total} HasMore={More}",
+                logical, page, coll.Entities.Count, total, coll.MoreRecords);
+
+            foreach (var e in coll.Entities) yield return e;
+
+            if (!coll.MoreRecords) break;
+            query.PageInfo!.PageNumber++;
+            query.PageInfo.PagingCookie = coll.PagingCookie;
         }
-        _log.LogInformation("RetrieveAll ✓ {EntitySet}: {Total} rows across {Pages} pages",
-            entitySet, totalRows, page);
+
+        _log.LogInformation("EventName=RetrieveAll Entity={Logical} Total={Total} Pages={Pages}",
+            logical, total, page);
     }
 
-    public async Task<long> CountAsync(string entitySet, string? filter, CancellationToken ct)
+    public async Task<long> CountAsync(string entityLogicalName, FilterExpression? filter, CancellationToken ct)
     {
-        var url = $"{entitySet}?$count=true&$top=0";
-        if (!string.IsNullOrWhiteSpace(filter))
-            url += $"&$filter={Uri.EscapeDataString(filter)}";
-
-        _log.LogInformation("Count → GET {Url}", url);
-
-        using var req = await _gw.CreateAuthorizedRequestAsync(HttpMethod.Get, url, ct);
-        using var res = await _gw.SendAsync(req, ct);
-        if (!res.IsSuccessStatusCode)
+        // Stream the id only and count — Dataverse has no built-in cheap count for arbitrary filters.
+        var idAttr = entityLogicalName + "id";
+        var query = new QueryExpression(entityLogicalName)
         {
-            var errBody = await res.Content.ReadAsStringAsync(ct);
-            _log.LogError("Count ✗ GET {Url} {Status}. Body: {Body}",
-                url, (int)res.StatusCode, Truncate(errBody, 1000));
-            res.EnsureSuccessStatusCode();
+            ColumnSet = new ColumnSet(idAttr),
+            PageInfo = new PagingInfo { Count = 5000, PageNumber = 1, ReturnTotalRecordCount = true }
+        };
+        if (filter is not null) query.Criteria = filter;
+
+        EntityCollection? coll = null;
+        await _resilience.Pipeline.ExecuteAsync(async token =>
+        {
+            coll = await _factory.Client.RetrieveMultipleAsync(query, token);
+        }, ct);
+
+        long count = coll?.TotalRecordCount ?? 0;
+        if (count < 0 && coll is not null)
+        {
+            // TotalRecordCount returns -1 when not requested or unavailable; fall back to paging.
+            count = coll.Entities.Count;
+            while (coll!.MoreRecords)
+            {
+                query.PageInfo.PageNumber++;
+                query.PageInfo.PagingCookie = coll.PagingCookie;
+                await _resilience.Pipeline.ExecuteAsync(async token =>
+                {
+                    coll = await _factory.Client.RetrieveMultipleAsync(query, token);
+                }, ct);
+                count += coll.Entities.Count;
+            }
         }
-        var body = await res.Content.ReadAsStringAsync(ct);
-        using var doc = JsonDocument.Parse(body);
-        var count = doc.RootElement.TryGetProperty("@odata.count", out var c) ? c.GetInt64() : 0;
-        _log.LogInformation("Count ✓ {Url}: {Count}", url, count);
+
+        _log.LogInformation("EventName=Count Entity={Logical} Count={Count}", entityLogicalName, count);
         return count;
     }
-
-    private static string? AbsoluteToRelative(string? absolute, Uri baseAddress)
-    {
-        if (string.IsNullOrEmpty(absolute)) return null;
-        return Uri.TryCreate(absolute, UriKind.Absolute, out var u)
-            ? u.PathAndQuery.Replace(baseAddress.AbsolutePath, "")
-            : absolute;
-    }
-
-    private static string Truncate(string s, int max) => s.Length <= max ? s : s[..max] + "…";
 }

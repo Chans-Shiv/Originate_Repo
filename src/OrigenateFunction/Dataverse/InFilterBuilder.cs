@@ -1,10 +1,14 @@
+using Microsoft.Xrm.Sdk.Query;
+
 namespace OrigenateFunction.Dataverse;
 
 public static class InFilterBuilder
 {
-    public static string Build(string field, IEnumerable<string> values)
+    public static FilterExpression Build(string attribute, IEnumerable<string> values)
     {
-        var quoted = string.Join(",", values.Select(v => "'" + v.Replace("'", "''") + "'"));
-        return $"Microsoft.Dynamics.CRM.In(PropertyName='{field}',PropertyValues=[{quoted}])";
+        var arr = values.Cast<object>().ToArray();
+        var f = new FilterExpression();
+        f.Conditions.Add(new ConditionExpression(attribute, ConditionOperator.In, arr));
+        return f;
     }
 }

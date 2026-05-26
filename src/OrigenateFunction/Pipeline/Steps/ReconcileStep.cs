@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Xrm.Sdk;
 using OrigenateFunction.Abstractions;
 using OrigenateFunction.Dataverse;
 using OrigenateFunction.Mappers;
@@ -13,16 +14,16 @@ public sealed class ReconcileStep : IPipelineStep
 {
     private readonly StgOrigenateRepository _stg;
     private readonly HoldingRepository _holding;
-    private readonly JsonRowMapper _mapper;
+    private readonly EntityProjector _projector;
     private readonly OrigenateOptions _opts;
     private readonly ILogger<ReconcileStep> _log;
 
     public ReconcileStep(
         StgOrigenateRepository stg, HoldingRepository holding,
-        JsonRowMapper mapper,
+        EntityProjector projector,
         IOptions<OrigenateOptions> opts, ILogger<ReconcileStep> log)
     {
-        _stg = stg; _holding = holding; _mapper = mapper;
+        _stg = stg; _holding = holding; _projector = projector;
         _opts = opts.Value; _log = log;
     }
 
@@ -30,18 +31,18 @@ public sealed class ReconcileStep : IPipelineStep
 
     public async Task ExecuteAsync(PipelineContext ctx, CancellationToken ct)
     {
-        _log.LogInformation("Reconcile ▶ scanning HOLDING for orphan ApplicationNumbers");
+        _log.LogInformation("EventName=ReconcileStart");
 
         var holdingPage = new List<string>(_opts.PageSize);
         long reinserted = 0, totalFailures = 0;
 
         await foreach (var item in _holding.StreamAsync(null, new[] { ColumnMap.ApplicationNumberField }, ct))
         {
-            var app = _mapper.ExtractString(item, ColumnMap.ApplicationNumberField);
+            var app = _projector.ExtractString(item, ColumnMap.ApplicationNumberField);
             if (!string.IsNullOrEmpty(app)) holdingPage.Add(app);
             if (holdingPage.Count >= _opts.PageSize)
             {
-                _log.LogInformation("Reconcile: processing HOLDING page of {Count} app#s", holdingPage.Count);
+                _log.LogInformation("EventName=ReconcilePage Count={Count}", holdingPage.Count);
                 var (ins, fail) = await ReinsertOrphansAsync(holdingPage, ct);
                 reinserted += ins; totalFailures += fail;
                 holdingPage.Clear();
@@ -49,13 +50,12 @@ public sealed class ReconcileStep : IPipelineStep
         }
         if (holdingPage.Count > 0)
         {
-            _log.LogInformation("Reconcile: processing final HOLDING page of {Count} app#s", holdingPage.Count);
+            _log.LogInformation("EventName=ReconcilePage Count={Count}", holdingPage.Count);
             var (ins, fail) = await ReinsertOrphansAsync(holdingPage, ct);
             reinserted += ins; totalFailures += fail;
         }
 
-        _log.LogInformation("Reconcile ✓ re-inserted {Count} orphan rows into STG ({Failed} insert failures)",
-            reinserted, totalFailures);
+        _log.LogInformation("EventName=Reconcile Reinserted={Count} Failed={Failed}", reinserted, totalFailures);
     }
 
     private async Task<(int Inserted, int Failed)> ReinsertOrphansAsync(List<string> holdingAppNumbers, CancellationToken ct)
@@ -69,13 +69,13 @@ public sealed class ReconcileStep : IPipelineStep
             var filter = InFilterBuilder.Build(ColumnMap.ApplicationNumberField, slice);
             await foreach (var item in _stg.StreamAsync(filter, new[] { ColumnMap.ApplicationNumberField }, ct))
             {
-                var s = _mapper.ExtractString(item, ColumnMap.ApplicationNumberField);
+                var s = _projector.ExtractString(item, ColumnMap.ApplicationNumberField);
                 if (s is not null) present.Add(s);
             }
         }
 
         var orphans = holdingAppNumbers.Where(a => !present.Contains(a)).ToArray();
-        _log.LogInformation("Reconcile: page had {Holding} HOLDING rows, {Present} already in STG, {Orphan} orphans",
+        _log.LogInformation("EventName=ReconcileOrphans Holding={Holding} InStg={Present} Orphans={Orphan}",
             holdingAppNumbers.Count, present.Count, orphans.Length);
         if (orphans.Length == 0) return (0, 0);
 
@@ -84,10 +84,10 @@ public sealed class ReconcileStep : IPipelineStep
         {
             var slice = orphans.Skip(i).Take(chunkSize).ToArray();
             var filter = InFilterBuilder.Build(ColumnMap.ApplicationNumberField, slice);
-            var buffer = new List<IDictionary<string, object?>>();
+            var buffer = new List<Entity>();
             await foreach (var item in _holding.StreamAsync(filter, ColumnMap.StgBusinessFields, ct))
             {
-                buffer.Add(_mapper.MapJsonToRecord(item, ColumnMap.StgBusinessFields));
+                buffer.Add(_projector.Project(item, _stg.EntityLogicalName, ColumnMap.StgBusinessFields));
                 if (buffer.Count >= _opts.InsertBatchSize)
                 {
                     var (ok, fail) = await FlushAsync(buffer, ct);
@@ -104,7 +104,7 @@ public sealed class ReconcileStep : IPipelineStep
         return (inserted, failed);
     }
 
-    private async Task<(int Ok, int Failed)> FlushAsync(List<IDictionary<string, object?>> buffer, CancellationToken ct)
+    private async Task<(int Ok, int Failed)> FlushAsync(List<Entity> buffer, CancellationToken ct)
     {
         var results = await _stg.InsertManyAsync(buffer, ct);
         int failed = 0; string? firstErr = null;
@@ -113,7 +113,7 @@ public sealed class ReconcileStep : IPipelineStep
             if (!r.Success) { failed++; firstErr ??= r.Error; }
         }
         if (failed > 0)
-            _log.LogError("Reconcile orphan-reinsert: {Failed}/{Total} failures. First error: {Err}",
+            _log.LogError("EventName=ReconcileBatchPartial Failed={Failed}/{Total} FirstError={Err}",
                 failed, buffer.Count, firstErr);
         return (buffer.Count - failed, failed);
     }

@@ -18,8 +18,8 @@ public sealed class ClearHoldingStep : IPipelineStep
 
     public async Task ExecuteAsync(PipelineContext ctx, CancellationToken ct)
     {
-        _log.LogInformation("ClearHolding ▶ entitySet={EntitySet}", _holding.EntitySet);
+        _log.LogInformation("EventName=ClearHoldingStart Entity={Logical}", _holding.EntityLogicalName);
         await _holding.TruncateAsync(ct);
-        _log.LogInformation("ClearHolding ✓");
+        _log.LogInformation("EventName=ClearHolding");
     }
 }

@@ -1,103 +1,118 @@
-using System.Text;
-using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Messages;
 using OrigenateFunction.Abstractions;
+using OrigenateFunction.Options;
 
 namespace OrigenateFunction.Dataverse;
 
+// Bulk insert via ExecuteMultipleRequest (CreateRequest, ContinueOnError).
+// Two-stage retry: full batch → short delay → retry of failed-only records.
+// Final per-record results are surfaced to the caller.
 public sealed class BulkWriter : IBulkWriter
 {
-    private static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy = null };
-    private readonly IDataverseGateway _gw;
+    private readonly DataverseConnectionFactory _factory;
+    private readonly DataverseResiliencePipeline _resilience;
     private readonly ILogger<BulkWriter> _log;
+    private readonly TimeSpan _retryDelay;
 
-    public BulkWriter(IDataverseGateway gw, ILogger<BulkWriter> log)
+    public BulkWriter(
+        DataverseConnectionFactory factory,
+        DataverseResiliencePipeline resilience,
+        IOptions<OrigenateOptions> opts,
+        ILogger<BulkWriter> log)
     {
-        _gw = gw;
+        _factory = factory;
+        _resilience = resilience;
         _log = log;
+        _retryDelay = TimeSpan.FromSeconds(Math.Max(1, opts.Value.RetryDelaySeconds));
     }
 
     public async Task<IReadOnlyList<RowWriteResult>> CreateMultipleAsync(
-        string entityLogicalName,
-        IReadOnlyList<IDictionary<string, object?>> records,
+        IReadOnlyList<Entity> entities,
         CancellationToken ct)
     {
-        if (records.Count == 0) return Array.Empty<RowWriteResult>();
+        if (entities.Count == 0) return Array.Empty<RowWriteResult>();
+        var logical = entities[0].LogicalName;
 
-        var targets = records.Select(r =>
+        // Stage 1: full batch
+        _log.LogInformation("EventName=BulkInsertBatchStart Entity={Logical} Count={Count}",
+            logical, entities.Count);
+        var stage1 = await ExecuteOnceAsync(entities, ct);
+
+        if (stage1.Faults.Count == 0)
         {
-            var d = new Dictionary<string, object?>(r, StringComparer.OrdinalIgnoreCase)
-            {
-                ["@odata.type"] = "Microsoft.Dynamics.CRM." + entityLogicalName
-            };
-            return d;
-        }).ToArray();
-
-        var payload = new Dictionary<string, object?> { ["Targets"] = targets };
-        var entitySet = Pluralize(entityLogicalName);
-        var url = $"{entitySet}/Microsoft.Dynamics.CRM.CreateMultiple";
-
-        _log.LogInformation("CreateMultiple → POST {Url} ({Count} records, logical={Logical})",
-            url, records.Count, entityLogicalName);
-
-        using var req = await _gw.CreateAuthorizedRequestAsync(HttpMethod.Post, url, ct);
-        req.Content = new StringContent(JsonSerializer.Serialize(payload, Json), Encoding.UTF8, "application/json");
-
-        using var res = await _gw.SendAsync(req, ct);
-        if (res.IsSuccessStatusCode)
-        {
-            _log.LogInformation("CreateMultiple ✓ {Url} {Status} ({Count} records)",
-                url, (int)res.StatusCode, records.Count);
-            return Enumerable.Range(0, records.Count).Select(_ => RowWriteResult.Ok()).ToArray();
+            _log.LogInformation("EventName=BulkInsertBatch Entity={Logical} Count={Count} Failed=0",
+                logical, entities.Count);
+            return stage1.Results;
         }
 
-        var errBody = await res.Content.ReadAsStringAsync(ct);
-        _log.LogWarning("CreateMultiple ✗ {Url} {Status}; falling back to per-row $batch. Body: {Body}",
-            url, (int)res.StatusCode, Truncate(errBody, 1000));
+        _log.LogWarning(
+            "EventName=BulkInsertBatchPartial Entity={Logical} Count={Count} Failed={Failed} FirstError={Err}",
+            logical, entities.Count, stage1.Faults.Count, Truncate(stage1.Faults[0].Error, 500));
 
-        return await PerRowBatchFallbackAsync(entityLogicalName, records, ct);
+        // Stage 2: retry only the failed records after a short delay
+        await Task.Delay(_retryDelay, ct);
+
+        var retryEntities = stage1.Faults.Select(f => entities[f.Index]).ToArray();
+        _log.LogInformation("EventName=BulkInsertRetryStart Entity={Logical} Count={Count}",
+            logical, retryEntities.Length);
+        var stage2 = await ExecuteOnceAsync(retryEntities, ct);
+
+        var final = (RowWriteResult[])stage1.Results;
+        for (int i = 0; i < retryEntities.Length; i++)
+        {
+            var origIdx = stage1.Faults[i].Index;
+            final[origIdx] = stage2.Results[i];
+        }
+
+        var stillFailed = stage2.Faults.Count;
+        _log.LogInformation(
+            "EventName=BulkInsertBatchFinal Entity={Logical} Count={Count} Failed={Failed}{FirstErr}",
+            logical, entities.Count, stillFailed,
+            stillFailed > 0 ? $" FirstError={Truncate(stage2.Faults[0].Error, 500)}" : "");
+
+        return final;
     }
 
-    private async Task<IReadOnlyList<RowWriteResult>> PerRowBatchFallbackAsync(
-        string entityLogicalName, IReadOnlyList<IDictionary<string, object?>> records, CancellationToken ct)
+    private async Task<StageResult> ExecuteOnceAsync(IReadOnlyList<Entity> entities, CancellationToken ct)
     {
-        var entitySet = Pluralize(entityLogicalName);
-        var builder = new MultipartBatchBuilder(_gw.BaseAddress);
-        foreach (var r in records) builder.AddCreate(entitySet, r);
-
-        _log.LogInformation("Per-row $batch fallback → POST $batch ({Count} creates against {EntitySet})",
-            records.Count, entitySet);
-
-        using var req = await _gw.CreateAuthorizedRequestAsync(HttpMethod.Post, "$batch", ct);
-        req.Content = builder.Build();
-
-        using var res = await _gw.SendAsync(req, ct);
-        var body = await res.Content.ReadAsStringAsync(ct);
-
-        if (!res.IsSuccessStatusCode)
-            _log.LogError("$batch fallback ✗ {Status}. Body: {Body}",
-                (int)res.StatusCode, Truncate(body, 1000));
-
-        var results = new RowWriteResult[records.Count];
-        MultipartBatchResponseParser.ApplyResults(body, results);
-
-        var failed = results.Count(r => r != null && !r.Success);
-        if (failed > 0)
+        var req = new ExecuteMultipleRequest
         {
-            var firstErr = results.FirstOrDefault(r => r != null && !r.Success)?.Error;
-            _log.LogWarning("$batch fallback completed: {Ok} ok, {Failed} failed. First error: {Err}",
-                results.Length - failed, failed, Truncate(firstErr ?? "(none)", 500));
-        }
-        else
-        {
-            _log.LogInformation("$batch fallback ✓ all {Count} records inserted", records.Count);
-        }
+            Settings = new ExecuteMultipleSettings { ContinueOnError = true, ReturnResponses = false },
+            Requests = new OrganizationRequestCollection()
+        };
+        foreach (var e in entities) req.Requests.Add(new CreateRequest { Target = e });
 
-        return results;
+        ExecuteMultipleResponse? resp = null;
+        await _resilience.Pipeline.ExecuteAsync(async token =>
+        {
+            resp = (ExecuteMultipleResponse)await _factory.Client.ExecuteAsync(req, token);
+        }, ct);
+
+        var results = new RowWriteResult[entities.Count];
+        for (int i = 0; i < results.Length; i++) results[i] = RowWriteResult.Ok();
+
+        var faults = new List<Fault>();
+        if (resp?.IsFaulted == true)
+        {
+            foreach (var item in resp.Responses)
+            {
+                if (item.Fault is null) continue;
+                if (item.RequestIndex < 0 || item.RequestIndex >= entities.Count) continue;
+                results[item.RequestIndex] = RowWriteResult.Fail(item.Fault.Message);
+                faults.Add(new Fault(item.RequestIndex, item.Fault.Message));
+            }
+        }
+        return new StageResult(results, faults);
     }
 
-    private static string Pluralize(string entityLogical)
-        => entityLogical.EndsWith("s") ? entityLogical + "es" : entityLogical + "s";
+    private readonly record struct Fault(int Index, string Error);
+
+    private readonly record struct StageResult(
+        IReadOnlyList<RowWriteResult> Results,
+        IReadOnlyList<Fault> Faults);
 
     private static string Truncate(string s, int max) => s.Length <= max ? s : s[..max] + "…";
 }

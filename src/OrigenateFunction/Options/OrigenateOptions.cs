@@ -14,7 +14,9 @@ public sealed class OrigenateOptions
     public int DeleteBatchSize { get; set; } = 500;
     public int PageSize { get; set; } = 5000;
     public int MaxParallel { get; set; } = 4;
+    public int MaxParallelBatches { get; set; } = 4;
     public int MaxRetries { get; set; } = 5;
+    public int RetryDelaySeconds { get; set; } = 5;
 }
 
 public sealed class BlobConnectionOptions

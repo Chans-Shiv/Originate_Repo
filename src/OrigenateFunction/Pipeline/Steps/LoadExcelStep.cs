@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Xrm.Sdk;
 using OrigenateFunction.Abstractions;
 using OrigenateFunction.Excel;
 using OrigenateFunction.Models;
@@ -26,7 +27,12 @@ public sealed class LoadExcelStep : IPipelineStep
 
     public async Task ExecuteAsync(PipelineContext ctx, CancellationToken ct)
     {
-        _log.LogInformation("LoadExcel ▶ {Blob} (batchSize={Size})", ctx.BlobName, _opts.InsertBatchSize);
+        _log.LogInformation("EventName=LoadExcelStart Blob={Blob} BatchSize={Size} Parallel={Par}",
+            ctx.BlobName, _opts.InsertBatchSize, _opts.MaxParallelBatches);
+
+        using var sem = new SemaphoreSlim(_opts.MaxParallelBatches, _opts.MaxParallelBatches);
+        var failureLock = new object();
+        var inFlight = new List<Task>();
 
         var batch = new List<OrigenateRow>(_opts.InsertBatchSize);
         long total = 0;
@@ -40,9 +46,7 @@ public sealed class LoadExcelStep : IPipelineStep
             {
                 batchNum++;
                 total += batch.Count;
-                _log.LogInformation("LoadExcel: inserting batch {Batch} ({Rows} rows, total so far {Total})",
-                    batchNum, batch.Count, total);
-                await InsertAsync(batch, ctx, ct);
+                inFlight.Add(InsertAsync(batch.ToArray(), batchNum, ctx, failureLock, sem, ct));
                 batch.Clear();
             }
         }
@@ -50,11 +54,12 @@ public sealed class LoadExcelStep : IPipelineStep
         {
             batchNum++;
             total += batch.Count;
-            _log.LogInformation("LoadExcel: inserting final batch {Batch} ({Rows} rows, total {Total})",
-                batchNum, batch.Count, total);
-            await InsertAsync(batch, ctx, ct);
+            inFlight.Add(InsertAsync(batch.ToArray(), batchNum, ctx, failureLock, sem, ct));
         }
-        _log.LogInformation("LoadExcel ✓ {Blob}: {Total} rows attempted across {Batches} batches, {Exceptions} exceptions queued, {Failed} per-row failures",
+        await Task.WhenAll(inFlight);
+
+        _log.LogInformation(
+            "EventName=LoadExcel Blob={Blob} Total={Total} Batches={Batches} Exceptions={Exceptions} Failed={Failed}",
             ctx.BlobName, total, batchNum, ctx.Exceptions.Count, ctx.FailedRows.Count);
     }
 
@@ -67,35 +72,41 @@ public sealed class LoadExcelStep : IPipelineStep
         ctx.Exceptions.Add(new ExceptionRow(row.ApplicationNumber!, s, pr as string));
     }
 
-    private async Task InsertAsync(IReadOnlyList<OrigenateRow> rows, PipelineContext ctx, CancellationToken ct)
+    private async Task InsertAsync(
+        OrigenateRow[] rows, int batchNum, PipelineContext ctx,
+        object failureLock, SemaphoreSlim sem, CancellationToken ct)
     {
-        var entities = rows.Select(r => r.ToDataverseEntity()).ToArray();
-        var results = await _stg.InsertManyAsync(entities, ct);
-
-        var newFailures = 0;
-        string? firstErrThisBatch = null;
-        int? firstErrRowNumber = null;
-        for (int i = 0; i < rows.Count; i++)
+        await sem.WaitAsync(ct);
+        try
         {
-            if (!results[i].Success)
+            _log.LogInformation("EventName=LoadExcelBatchStart Batch={Batch} Rows={Rows}", batchNum, rows.Length);
+
+            var entities = rows.Select(r => r.ToDataverseEntity()).ToArray();
+            var results = await _stg.InsertManyAsync(entities, ct);
+
+            var newFailures = 0;
+            string? firstErr = null;
+            int? firstErrRowNumber = null;
+            for (int i = 0; i < rows.Length; i++)
             {
-                newFailures++;
-                ctx.FailedRows.Add(new FailedRow(rows[i].RowNumber, rows[i], results[i].Error ?? "unknown"));
-                if (firstErrThisBatch is null)
+                if (!results[i].Success)
                 {
-                    firstErrThisBatch = results[i].Error;
-                    firstErrRowNumber = rows[i].RowNumber;
+                    newFailures++;
+                    lock (failureLock)
+                        ctx.FailedRows.Add(new FailedRow(rows[i].RowNumber, rows[i], results[i].Error ?? "unknown"));
+                    if (firstErr is null)
+                    {
+                        firstErr = results[i].Error;
+                        firstErrRowNumber = rows[i].RowNumber;
+                    }
                 }
             }
+            if (newFailures > 0)
+                _log.LogError("EventName=LoadExcelBatchPartial Batch={Batch} Failed={Failed}/{Total} ExcelRow={Row} FirstError={Err}",
+                    batchNum, newFailures, rows.Length, firstErrRowNumber, firstErr);
+            else
+                _log.LogInformation("EventName=LoadExcelBatch Batch={Batch} Rows={Count} Failed=0", batchNum, rows.Length);
         }
-        if (newFailures > 0)
-        {
-            _log.LogError("LoadExcel batch had {Failed}/{Total} failures. First error (Excel row {Row}): {Err}",
-                newFailures, rows.Count, firstErrRowNumber, firstErrThisBatch);
-        }
-        else
-        {
-            _log.LogInformation("LoadExcel batch ✓ {Count} rows inserted", rows.Count);
-        }
+        finally { sem.Release(); }
     }
 }

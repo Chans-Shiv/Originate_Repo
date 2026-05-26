@@ -14,7 +14,6 @@ public sealed class StgOrigenateRepository : TableRepositoryBase
         : base(w, d, r, o, log) { }
 
     public override string EntityLogicalName => ColumnMap.StgOrigenateEntityLogical;
-    public override string EntitySet => ColumnMap.StgOrigenateEntitySet;
     public override string PrimaryIdField => ColumnMap.StgOrigenatePrimaryId;
 }
 
@@ -26,7 +25,6 @@ public sealed class HoldingRepository : TableRepositoryBase
         : base(w, d, r, o, log) { }
 
     public override string EntityLogicalName => ColumnMap.HoldingEntityLogical;
-    public override string EntitySet => ColumnMap.HoldingEntitySet;
     public override string PrimaryIdField => ColumnMap.HoldingPrimaryId;
 }
 
@@ -38,6 +36,5 @@ public sealed class ExceptionsRepository : TableRepositoryBase
         : base(w, d, r, o, log) { }
 
     public override string EntityLogicalName => ColumnMap.ExceptionsEntityLogical;
-    public override string EntitySet => ColumnMap.ExceptionsEntitySet;
     public override string PrimaryIdField => ColumnMap.ExceptionsPrimaryId;
 }

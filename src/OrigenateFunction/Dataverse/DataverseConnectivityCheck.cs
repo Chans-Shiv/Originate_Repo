@@ -1,20 +1,16 @@
-using System.Text.Json;
-using OrigenateFunction.Abstractions;
+using Microsoft.Crm.Sdk.Messages;
+using Microsoft.Xrm.Sdk;
 
 namespace OrigenateFunction.Dataverse;
 
 public sealed class DataverseConnectivityCheck
 {
-    private readonly IDataverseGateway _gw;
-    public DataverseConnectivityCheck(IDataverseGateway gw) => _gw = gw;
+    private readonly DataverseConnectionFactory _factory;
+    public DataverseConnectivityCheck(DataverseConnectionFactory factory) => _factory = factory;
 
-    public async Task<string> WhoAmIAsync(CancellationToken ct)
+    public async Task<Guid> WhoAmIAsync(CancellationToken ct)
     {
-        using var req = await _gw.CreateAuthorizedRequestAsync(HttpMethod.Get, "WhoAmI", ct);
-        using var res = await _gw.SendAsync(req, ct);
-        res.EnsureSuccessStatusCode();
-        var body = await res.Content.ReadAsStringAsync(ct);
-        using var doc = JsonDocument.Parse(body);
-        return doc.RootElement.GetProperty("UserId").GetString() ?? "";
+        var resp = (WhoAmIResponse)await _factory.Client.ExecuteAsync(new WhoAmIRequest(), ct);
+        return resp.UserId;
     }
 }

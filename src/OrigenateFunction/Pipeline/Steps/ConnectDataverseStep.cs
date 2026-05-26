@@ -19,6 +19,6 @@ public sealed class ConnectDataverseStep : IPipelineStep
     public async Task ExecuteAsync(PipelineContext ctx, CancellationToken ct)
     {
         var userId = await _check.WhoAmIAsync(ct);
-        _log.LogInformation("Connected to Dataverse as {UserId}", userId);
+        _log.LogInformation("EventName=DataverseConnected UserId={UserId}", userId);
     }
 }

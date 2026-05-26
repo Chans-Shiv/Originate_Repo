@@ -1,3 +1,5 @@
+using Microsoft.Xrm.Sdk;
+
 namespace OrigenateFunction.Models;
 
 public sealed record ExceptionRow(
@@ -5,10 +7,16 @@ public sealed record ExceptionRow(
     string? PolicyExceptions,
     string? PolicyExceptionsReason)
 {
-    public IDictionary<string, object?> ToDataverseEntity() => new Dictionary<string, object?>
+    public Entity ToDataverseEntity()
     {
-        [ColumnMap.ApplicationNumberField] = ApplicationNumber,
-        [ColumnMap.PolicyExceptionsField] = PolicyExceptions,
-        [ColumnMap.PolicyExceptionsReasonField] = PolicyExceptionsReason,
-    };
+        var e = new Entity(ColumnMap.ExceptionsEntityLogical)
+        {
+            [ColumnMap.ApplicationNumberField] = ApplicationNumber,
+        };
+        if (PolicyExceptions is not null)
+            e[ColumnMap.PolicyExceptionsField] = PolicyExceptions;
+        if (PolicyExceptionsReason is not null)
+            e[ColumnMap.PolicyExceptionsReasonField] = PolicyExceptionsReason;
+        return e;
+    }
 }

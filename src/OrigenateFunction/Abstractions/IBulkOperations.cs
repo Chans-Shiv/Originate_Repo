@@ -1,4 +1,5 @@
-using System.Text.Json;
+using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Query;
 
 namespace OrigenateFunction.Abstractions;
 
@@ -11,24 +12,20 @@ public sealed record RowWriteResult(bool Success, string? Error)
 public interface IBulkWriter
 {
     Task<IReadOnlyList<RowWriteResult>> CreateMultipleAsync(
-        string entityLogicalName,
-        IReadOnlyList<IDictionary<string, object?>> records,
+        IReadOnlyList<Entity> entities,
         CancellationToken ct);
 }
 
 public interface IBulkDeleter
 {
-    Task DeleteBatchAsync(string entitySet, IReadOnlyList<Guid> ids, CancellationToken ct);
+    Task DeleteBatchAsync(string entityLogicalName, IReadOnlyList<Guid> ids, CancellationToken ct);
 }
 
 public interface IPagedReader
 {
-    IAsyncEnumerable<JsonElement> RetrieveAllAsync(
-        string entitySet,
-        string? filter,
-        IEnumerable<string> select,
-        int pageSize,
+    IAsyncEnumerable<Entity> RetrieveAllAsync(
+        QueryExpression query,
         CancellationToken ct = default);
 
-    Task<long> CountAsync(string entitySet, string? filter, CancellationToken ct);
+    Task<long> CountAsync(string entityLogicalName, FilterExpression? filter, CancellationToken ct);
 }

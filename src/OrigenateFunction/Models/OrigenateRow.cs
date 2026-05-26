@@ -1,3 +1,5 @@
+using Microsoft.Xrm.Sdk;
+
 namespace OrigenateFunction.Models;
 
 public sealed class OrigenateRow
@@ -8,16 +10,17 @@ public sealed class OrigenateRow
 
     // Build the payload for STG_ORIGENATE — excludes columns that belong to
     // STG_ORIGENATE_EXCEPTIONS only (PolicyExceptions, PolicyExceptionsReason).
-    public IDictionary<string, object?> ToDataverseEntity()
+    public Entity ToDataverseEntity()
     {
-        var d = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        var e = new Entity(ColumnMap.StgOrigenateEntityLogical);
         foreach (var kv in Fields)
         {
             if (ColumnMap.ExcludedFromStg.Contains(kv.Key)) continue;
-            d[kv.Key] = kv.Value;
+            if (kv.Value is null) continue;
+            e[kv.Key] = kv.Value;
         }
         if (!string.IsNullOrWhiteSpace(ApplicationNumber))
-            d[ColumnMap.ApplicationNumberField] = ApplicationNumber;
-        return d;
+            e[ColumnMap.ApplicationNumberField] = ApplicationNumber;
+        return e;
     }
 }

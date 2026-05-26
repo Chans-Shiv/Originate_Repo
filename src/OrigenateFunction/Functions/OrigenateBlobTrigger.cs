@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
 using OrigenateFunction.Abstractions;
@@ -23,9 +24,21 @@ public sealed class OrigenateBlobTrigger
         FunctionContext context)
     {
         var fullName = name + ".xlsx";
-        _log.LogInformation("Blob trigger fired for {Blob}", fullName);
+        var sw = Stopwatch.StartNew();
+        _log.LogInformation("==== Blob trigger fired for {Blob} (invocationId={Invocation}) ====",
+            fullName, context.InvocationId);
 
         var ctx = new PipelineContext { BlobName = fullName, BlobStream = blobStream };
-        await _pipeline.RunAsync(ctx, context.CancellationToken);
+        try
+        {
+            await _pipeline.RunAsync(ctx, context.CancellationToken);
+            _log.LogInformation("==== Blob trigger ✓ for {Blob} in {Elapsed} (rows failed: {Failed}, exceptions: {Exceptions}) ====",
+                fullName, sw.Elapsed, ctx.FailedRows.Count, ctx.Exceptions.Count);
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex, "==== Blob trigger ✗ for {Blob} after {Elapsed} ====", fullName, sw.Elapsed);
+            throw;
+        }
     }
 }

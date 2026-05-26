@@ -13,6 +13,7 @@ public sealed class OpenXmlExcelReader
 
     public IEnumerable<OrigenateRow> StreamRows(string xlsxPath)
     {
+        _log.LogInformation("Excel ▶ opening {Path}", xlsxPath);
         using var doc = SpreadsheetDocument.Open(xlsxPath, false);
         var wbPart = doc.WorkbookPart ?? throw new InvalidDataException("Workbook part missing.");
         var sheet = wbPart.Workbook.Descendants<Sheet>().FirstOrDefault()
@@ -22,7 +23,9 @@ public sealed class OpenXmlExcelReader
 
         using var reader = OpenXmlReader.Create(wsPart);
         var headers = new Dictionary<int, string>();
+        var unmappedHeaders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         int rowNum = 0;
+        int dataRows = 0, skippedEmpty = 0;
 
         while (reader.Read())
         {
@@ -34,23 +37,42 @@ public sealed class OpenXmlExcelReader
             if (rowNum == 1)
             {
                 foreach (var kv in values) headers[kv.Key] = (kv.Value ?? "").Trim();
+                var mapped = headers.Values.Count(h => !string.IsNullOrWhiteSpace(h) && ColumnMap.ExcelHeaderToDataverse.ContainsKey(h));
+                var ignored = headers.Values
+                    .Where(h => !string.IsNullOrWhiteSpace(h) && !ColumnMap.ExcelHeaderToDataverse.ContainsKey(h))
+                    .ToArray();
+                _log.LogInformation("Excel header row: {Total} columns, {Mapped} mapped to Dataverse, {Ignored} ignored",
+                    headers.Count, mapped, ignored.Length);
+                if (ignored.Length > 0)
+                    _log.LogWarning("Excel headers NOT in ColumnMap (skipped): {Ignored}",
+                        string.Join(", ", ignored));
                 continue;
             }
 
-            if (values.Count == 0 || values.All(v => string.IsNullOrWhiteSpace(v.Value))) continue;
+            if (values.Count == 0 || values.All(v => string.IsNullOrWhiteSpace(v.Value)))
+            {
+                skippedEmpty++;
+                continue;
+            }
 
             var row = new OrigenateRow { RowNumber = rowNum };
             foreach (var (colIdx, val) in values)
             {
                 if (!headers.TryGetValue(colIdx, out var header) || string.IsNullOrWhiteSpace(header)) continue;
-                if (!ColumnMap.ExcelHeaderToDataverse.TryGetValue(header, out var dvField)) continue;
+                if (!ColumnMap.ExcelHeaderToDataverse.TryGetValue(header, out var dvField))
+                {
+                    unmappedHeaders.Add(header);
+                    continue;
+                }
                 row.Fields[dvField] = val;
                 if (string.Equals(dvField, ColumnMap.ApplicationNumberField, StringComparison.OrdinalIgnoreCase))
                     row.ApplicationNumber = val;
             }
+            dataRows++;
             yield return row;
         }
-        _log.LogInformation("Streamed {Rows} data rows from {Path}", rowNum - 1, xlsxPath);
+        _log.LogInformation("Excel ✓ streamed {Rows} data rows ({Skipped} empty rows skipped) from {Path}",
+            dataRows, skippedEmpty, xlsxPath);
     }
 
     private static Dictionary<int, string?> ReadRowValues(OpenXmlReader reader, SharedStringTable? sst)

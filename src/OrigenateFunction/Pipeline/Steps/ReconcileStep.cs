@@ -30,8 +30,10 @@ public sealed class ReconcileStep : IPipelineStep
 
     public async Task ExecuteAsync(PipelineContext ctx, CancellationToken ct)
     {
+        _log.LogInformation("Reconcile ▶ scanning HOLDING for orphan ApplicationNumbers");
+
         var holdingPage = new List<string>(_opts.PageSize);
-        long reinserted = 0;
+        long reinserted = 0, totalFailures = 0;
 
         await foreach (var item in _holding.StreamAsync(null, new[] { ColumnMap.ApplicationNumberField }, ct))
         {
@@ -39,17 +41,24 @@ public sealed class ReconcileStep : IPipelineStep
             if (!string.IsNullOrEmpty(app)) holdingPage.Add(app);
             if (holdingPage.Count >= _opts.PageSize)
             {
-                reinserted += await ReinsertOrphansAsync(holdingPage, ct);
+                _log.LogInformation("Reconcile: processing HOLDING page of {Count} app#s", holdingPage.Count);
+                var (ins, fail) = await ReinsertOrphansAsync(holdingPage, ct);
+                reinserted += ins; totalFailures += fail;
                 holdingPage.Clear();
             }
         }
         if (holdingPage.Count > 0)
-            reinserted += await ReinsertOrphansAsync(holdingPage, ct);
+        {
+            _log.LogInformation("Reconcile: processing final HOLDING page of {Count} app#s", holdingPage.Count);
+            var (ins, fail) = await ReinsertOrphansAsync(holdingPage, ct);
+            reinserted += ins; totalFailures += fail;
+        }
 
-        _log.LogInformation("Re-inserted {Count} orphan rows into STG", reinserted);
+        _log.LogInformation("Reconcile ✓ re-inserted {Count} orphan rows into STG ({Failed} insert failures)",
+            reinserted, totalFailures);
     }
 
-    private async Task<int> ReinsertOrphansAsync(List<string> holdingAppNumbers, CancellationToken ct)
+    private async Task<(int Inserted, int Failed)> ReinsertOrphansAsync(List<string> holdingAppNumbers, CancellationToken ct)
     {
         const int chunkSize = 500;
         var present = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -66,9 +75,11 @@ public sealed class ReconcileStep : IPipelineStep
         }
 
         var orphans = holdingAppNumbers.Where(a => !present.Contains(a)).ToArray();
-        if (orphans.Length == 0) return 0;
+        _log.LogInformation("Reconcile: page had {Holding} HOLDING rows, {Present} already in STG, {Orphan} orphans",
+            holdingAppNumbers.Count, present.Count, orphans.Length);
+        if (orphans.Length == 0) return (0, 0);
 
-        int inserted = 0;
+        int inserted = 0, failed = 0;
         for (int i = 0; i < orphans.Length; i += chunkSize)
         {
             var slice = orphans.Skip(i).Take(chunkSize).ToArray();
@@ -79,17 +90,31 @@ public sealed class ReconcileStep : IPipelineStep
                 buffer.Add(_mapper.MapJsonToRecord(item, ColumnMap.StgBusinessFields));
                 if (buffer.Count >= _opts.InsertBatchSize)
                 {
-                    inserted += buffer.Count;
-                    await _stg.InsertManyAsync(buffer, ct);
+                    var (ok, fail) = await FlushAsync(buffer, ct);
+                    inserted += ok; failed += fail;
                     buffer.Clear();
                 }
             }
             if (buffer.Count > 0)
             {
-                inserted += buffer.Count;
-                await _stg.InsertManyAsync(buffer, ct);
+                var (ok, fail) = await FlushAsync(buffer, ct);
+                inserted += ok; failed += fail;
             }
         }
-        return inserted;
+        return (inserted, failed);
+    }
+
+    private async Task<(int Ok, int Failed)> FlushAsync(List<IDictionary<string, object?>> buffer, CancellationToken ct)
+    {
+        var results = await _stg.InsertManyAsync(buffer, ct);
+        int failed = 0; string? firstErr = null;
+        foreach (var r in results)
+        {
+            if (!r.Success) { failed++; firstErr ??= r.Error; }
+        }
+        if (failed > 0)
+            _log.LogError("Reconcile orphan-reinsert: {Failed}/{Total} failures. First error: {Err}",
+                failed, buffer.Count, firstErr);
+        return (buffer.Count - failed, failed);
     }
 }

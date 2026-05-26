@@ -5,6 +5,7 @@ using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using OrigenateFunction.Abstractions;
 using OrigenateFunction.Dataverse;
 using OrigenateFunction.Excel;
@@ -21,6 +22,16 @@ var host = new HostBuilder()
     {
         services.AddApplicationInsightsTelemetryWorkerService();
         services.ConfigureFunctionsApplicationInsights();
+
+        // Functions worker installs a default LoggerFilterRule on the App Insights
+        // provider that drops every category below Warning — which silences our
+        // Information-level structured logs in the terminal. Remove it.
+        services.Configure<LoggerFilterOptions>(options =>
+        {
+            var aiRule = options.Rules.FirstOrDefault(r => r.ProviderName ==
+                "Microsoft.Extensions.Logging.ApplicationInsights.ApplicationInsightsLoggerProvider");
+            if (aiRule is not null) options.Rules.Remove(aiRule);
+        });
 
         services.AddOptions<OrigenateOptions>().Configure<IConfiguration>((o, c) => c.Bind(o));
         services.AddOptions<BlobConnectionOptions>()

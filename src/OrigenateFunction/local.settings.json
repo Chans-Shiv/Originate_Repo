@@ -9,7 +9,7 @@
     "AzureWebJobsStorage__queueServiceUri": "https://<STORAGE_ACCOUNT>.queue.core.windows.net",
     "AzureWebJobsStorage__tableServiceUri": "https://<STORAGE_ACCOUNT>.table.core.windows.net",
 
-    "BlobConnection__serviceUri":      "https://<STORAGE_ACCOUNT>.blob.core.windows.net",
+    "BlobConnection__blobServiceUri":  "https://<STORAGE_ACCOUNT>.blob.core.windows.net",
     "BlobConnection__queueServiceUri": "https://<STORAGE_ACCOUNT>.queue.core.windows.net",
 
     "DataverseUrl": "https://org1e37fc51.crm.dynamics.com",

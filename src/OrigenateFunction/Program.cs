@@ -70,21 +70,24 @@ var host = new HostBuilder()
             });
         });
 
-        // BlobServiceClient — identity-based only. Resolves via BlobConnection__serviceUri
+        // BlobServiceClient — identity-based only. Resolves via BlobConnection__blobServiceUri
         // (e.g. "https://<account>.blob.core.windows.net") and authenticates with the
-        // shared TokenCredential (DefaultAzureCredential chain: Az CLI / Interactive Browser).
-        // The caller principal must hold "Storage Blob Data Contributor" on the account.
+        // shared TokenCredential (DefaultAzureCredential chain: Az CLI / Interactive Browser
+        // locally, Managed Identity in Azure).
+        // The caller principal must hold "Storage Blob Data Contributor" on the account
+        // (and "Storage Queue Data Contributor" for the BlobTrigger's hidden queue).
         services.AddSingleton(sp =>
         {
-            var serviceUri = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<BlobConnectionOptions>>().Value.ServiceUri;
-            if (string.IsNullOrWhiteSpace(serviceUri) || LooksLikePlaceholder(serviceUri))
+            var blobUri = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<BlobConnectionOptions>>().Value.BlobServiceUri;
+            if (string.IsNullOrWhiteSpace(blobUri) || LooksLikePlaceholder(blobUri))
                 throw new InvalidOperationException(
-                    "BlobConnection__serviceUri is not configured. In local.settings.json set " +
-                    "'BlobConnection__serviceUri' to your blob endpoint, e.g. " +
-                    "'https://<account>.blob.core.windows.net'. The signed-in identity must hold " +
-                    "'Storage Blob Data Contributor' on the storage account.");
+                    "BlobConnection__blobServiceUri is not configured. In local.settings.json set " +
+                    "'BlobConnection__blobServiceUri' to your blob endpoint, e.g. " +
+                    "'https://<account>.blob.core.windows.net'. Also set 'BlobConnection__queueServiceUri' " +
+                    "to the queue endpoint — the BlobTrigger needs both. The signed-in identity must hold " +
+                    "'Storage Blob Data Contributor' + 'Storage Queue Data Contributor' on the account.");
 
-            return new BlobServiceClient(new Uri(serviceUri), sp.GetRequiredService<TokenCredential>());
+            return new BlobServiceClient(new Uri(blobUri), sp.GetRequiredService<TokenCredential>());
 
             static bool LooksLikePlaceholder(string? value)
                 => !string.IsNullOrWhiteSpace(value)

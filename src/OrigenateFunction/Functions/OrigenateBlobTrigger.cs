@@ -19,7 +19,7 @@ public sealed class OrigenateBlobTrigger
 
     [Function("OrigenateBlobTrigger")]
     public async Task Run(
-        [BlobTrigger("originate-landing/{name}.xlsx", Connection = "BlobConnection")] Stream blobStream,
+        [BlobTrigger("originate-landing/{name}.xlsx", Connection = "AzureWebJobsStorage")] Stream blobStream,
         string name,
         FunctionContext context)
     {

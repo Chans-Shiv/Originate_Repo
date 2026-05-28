@@ -25,12 +25,4 @@ public sealed class OrigenateOptions
     public int BulkDeleteTimeoutMinutes { get; set; } = 30;
 }
 
-// Single blob endpoint, e.g. "https://<acct>.blob.core.windows.net".
-// Bound from "BlobConnection__blobServiceUri". The queue service URI for
-// QueueServiceClient is derived by swapping .blob. → .queue. on this value,
-// so blob + queue live on the same storage account (single identity grant).
-public sealed class BlobConnectionOptions
-{
-    public string BlobServiceUri { get; set; } = "";
-}
 

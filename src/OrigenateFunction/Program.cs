@@ -36,8 +36,6 @@ var host = new HostBuilder()
         });
 
         services.AddOptions<OrigenateOptions>().Configure<IConfiguration>((o, c) => c.Bind(o));
-        services.AddOptions<BlobConnectionOptions>()
-            .Configure<IConfiguration>((o, c) => c.GetSection("BlobConnection").Bind(o));
 
         // Identity-only storage auth. In Azure the deployed function's Managed
         // Identity picks up the storage roles; locally `az login` / VS sign-in
@@ -59,28 +57,30 @@ var host = new HostBuilder()
             });
         });
 
-        // BlobServiceClient — identity-based, resolves from BlobConnection__blobServiceUri
-        // (e.g. "https://<account>.blob.core.windows.net"). Caller principal needs
-        // "Storage Blob Data Contributor" on the account.
+        // BlobServiceClient — identity-based, resolves from AzureWebJobsStorage__blobServiceUri.
+        // Same setting the Functions runtime uses for the BlobTrigger, so app + trigger share
+        // one account (one identity grant: "Storage Blob Data Contributor" + "Storage Queue
+        // Data Contributor" on that account).
         services.AddSingleton(sp =>
         {
-            var blobUri = sp.GetRequiredService<IOptions<BlobConnectionOptions>>().Value.BlobServiceUri;
-            RequireUri(blobUri, "BlobConnection__blobServiceUri");
-            return new BlobServiceClient(new Uri(blobUri), sp.GetRequiredService<TokenCredential>());
+            var cfg = sp.GetRequiredService<IConfiguration>();
+            var blobUri = cfg["AzureWebJobsStorage__blobServiceUri"];
+            RequireUri(blobUri, "AzureWebJobsStorage__blobServiceUri");
+            return new BlobServiceClient(new Uri(blobUri!), sp.GetRequiredService<TokenCredential>());
         });
 
-        // QueueServiceClient — queue URI is derived from the blob URI by swapping
-        // .blob. → .queue., so blob + queue share the same storage account (one
-        // identity grant). Caller principal needs "Storage Queue Data Contributor".
+        // QueueServiceClient — derived from the same blob URI (.blob. → .queue.), so blob
+        // and queue stay on the same account by construction.
         //
-        // MessageEncoding = Base64 matches the WebJobs QueueTrigger extension's
-        // default decoding; without it, queue-trigger consumers would log
-        // "Message decoding has failed!" and dead-letter every message.
+        // MessageEncoding = Base64 matches the WebJobs QueueTrigger extension's default
+        // decoding; without it, queue-trigger consumers would log "Message decoding has
+        // failed!" and dead-letter every message.
         services.AddSingleton(sp =>
         {
-            var blobUri = sp.GetRequiredService<IOptions<BlobConnectionOptions>>().Value.BlobServiceUri;
-            RequireUri(blobUri, "BlobConnection__blobServiceUri");
-            var queueUri = new Uri(blobUri.Replace(".blob.core.windows.net", ".queue.core.windows.net"));
+            var cfg = sp.GetRequiredService<IConfiguration>();
+            var blobUri = cfg["AzureWebJobsStorage__blobServiceUri"];
+            RequireUri(blobUri, "AzureWebJobsStorage__blobServiceUri");
+            var queueUri = new Uri(blobUri!.Replace(".blob.core.windows.net", ".queue.core.windows.net"));
             return new QueueServiceClient(
                 queueUri,
                 sp.GetRequiredService<TokenCredential>(),
@@ -139,7 +139,7 @@ static bool IsLocalDev() =>
         "Development",
         StringComparison.OrdinalIgnoreCase);
 
-static void RequireUri(string value, string keyName)
+static void RequireUri(string? value, string keyName)
 {
     if (string.IsNullOrWhiteSpace(value))
         throw new InvalidOperationException(

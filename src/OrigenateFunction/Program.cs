@@ -37,65 +37,58 @@ var host = new HostBuilder()
         services.AddOptions<BlobConnectionOptions>()
             .Configure<IConfiguration>((o, c) => c.GetSection("BlobConnection").Bind(o));
 
-        // DefaultAzureCredential chain narrowed to Az CLI + Interactive Browser only.
-        // Excluded sources frequently pick up stale tokens (old Visual Studio sign-in,
-        // shared token cache, env vars from a prior service principal) and cause
-        // 403 AuthorizationPermissionMismatch even when the *intended* account has
+        // DefaultAzureCredential chain switches based on IS_LOCAL_DEV:
+        //   local  → Az CLI + Interactive Browser; Managed Identity excluded
+        //   prod   → Managed Identity (and Workload Identity for AKS); CLI/Browser excluded
+        // Other sources (Env, SharedTokenCache, VS, VSCode, PowerShell, AZD) are always
+        // excluded — they frequently pick up stale tokens or wrong-tenant principals and
+        // cause 403 AuthorizationPermissionMismatch even when the *intended* account has
         // the right RBAC roles.
         services.AddSingleton<TokenCredential>(sp =>
         {
             var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<OrigenateOptions>>().Value;
+            var cfg = sp.GetRequiredService<IConfiguration>();
+            var isLocal = string.Equals(cfg["IS_LOCAL_DEV"], "true", StringComparison.OrdinalIgnoreCase);
+
             return new DefaultAzureCredential(new DefaultAzureCredentialOptions
             {
                 ExcludeEnvironmentCredential = true,
-                ExcludeWorkloadIdentityCredential = true,
-                ExcludeManagedIdentityCredential = true,
                 ExcludeSharedTokenCacheCredential = true,
                 ExcludeVisualStudioCredential = true,
                 ExcludeVisualStudioCodeCredential = true,
                 ExcludeAzurePowerShellCredential = true,
                 ExcludeAzureDeveloperCliCredential = true,
 
-                ExcludeInteractiveBrowserCredential = !opts.UseInteractiveBrowser,
+                // Local: developer auth only (CLI + optional interactive browser).
+                // Prod:  managed identity (and workload identity for AKS); no human sign-in.
+                ExcludeAzureCliCredential          = !isLocal,
+                ExcludeInteractiveBrowserCredential = !isLocal || !opts.UseInteractiveBrowser,
+                ExcludeManagedIdentityCredential    =  isLocal,
+                ExcludeWorkloadIdentityCredential   =  isLocal,
+
                 TenantId = string.IsNullOrWhiteSpace(opts.AzureTenantId) ? null : opts.AzureTenantId
             });
         });
 
-        // BlobServiceClient resolution, in priority order:
-        //   1. Connection string with AccountKey  → key-auth (escape hatch for RBAC/firewall/CA blocks)
-        //   2. "UseDevelopmentStorage=true"      → Azurite local emulator
-        //   3. BlobConnection__serviceUri        → identity-based (AAD via TokenCredential)
-        // Detects unresolved placeholder text and fails fast with an actionable message.
+        // BlobServiceClient — identity-based only. Resolves via BlobConnection__serviceUri
+        // (e.g. "https://<account>.blob.core.windows.net") and authenticates with the
+        // shared TokenCredential (DefaultAzureCredential chain: Az CLI / Interactive Browser).
+        // The caller principal must hold "Storage Blob Data Contributor" on the account.
         services.AddSingleton(sp =>
         {
-            var cfg = sp.GetRequiredService<IConfiguration>();
-            var cs = cfg["BlobConnection"];
-
-            if (LooksLikePlaceholder(cs))
-                throw new InvalidOperationException(
-                    "BlobConnection in local.settings.json still contains the placeholder " +
-                    "'<PASTE_STORAGE_CONNECTION_STRING_HERE>'. Replace it with a real connection " +
-                    "string, OR set it to 'UseDevelopmentStorage=true' to use Azurite.");
-
-            if (!string.IsNullOrWhiteSpace(cs) &&
-                cs.Equals("UseDevelopmentStorage=true", StringComparison.OrdinalIgnoreCase))
-                return new BlobServiceClient(cs);
-
-            if (!string.IsNullOrWhiteSpace(cs) && cs.Contains("AccountKey=", StringComparison.OrdinalIgnoreCase))
-                return new BlobServiceClient(cs);
-
             var serviceUri = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<BlobConnectionOptions>>().Value.ServiceUri;
-            if (string.IsNullOrWhiteSpace(serviceUri))
+            if (string.IsNullOrWhiteSpace(serviceUri) || LooksLikePlaceholder(serviceUri))
                 throw new InvalidOperationException(
-                    "Storage auth is not configured. In local.settings.json set ONE of: " +
-                    "(a) 'BlobConnection' to a real connection string (DefaultEndpointsProtocol=...;AccountKey=...), " +
-                    "(b) 'BlobConnection' to 'UseDevelopmentStorage=true' for Azurite, " +
-                    "(c) 'BlobConnection__serviceUri' (+ '__queueServiceUri') for identity-based auth.");
+                    "BlobConnection__serviceUri is not configured. In local.settings.json set " +
+                    "'BlobConnection__serviceUri' to your blob endpoint, e.g. " +
+                    "'https://<account>.blob.core.windows.net'. The signed-in identity must hold " +
+                    "'Storage Blob Data Contributor' on the storage account.");
+
             return new BlobServiceClient(new Uri(serviceUri), sp.GetRequiredService<TokenCredential>());
 
             static bool LooksLikePlaceholder(string? value)
                 => !string.IsNullOrWhiteSpace(value)
-                   && (value.StartsWith("<", StringComparison.Ordinal) || value.Contains("PASTE_", StringComparison.OrdinalIgnoreCase));
+                   && (value.StartsWith('<') || value.Contains("PASTE_", StringComparison.OrdinalIgnoreCase));
         });
 
         // Dataverse — ServiceClient SDK with cached token + Polly resilience pipeline.

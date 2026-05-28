@@ -25,12 +25,12 @@ public sealed class OrigenateOptions
     public int BulkDeleteTimeoutMinutes { get; set; } = 30;
 }
 
-// Identity-based config for the BlobTrigger uses the multi-resource form
-// (separate URIs per resource), because the trigger needs blob + queue access.
-// Bound from "BlobConnection__blobServiceUri" / "BlobConnection__queueServiceUri".
+// Single blob endpoint, e.g. "https://<acct>.blob.core.windows.net".
+// Bound from "BlobConnection__blobServiceUri". The queue service URI for
+// QueueServiceClient is derived by swapping .blob. → .queue. on this value,
+// so blob + queue live on the same storage account (single identity grant).
 public sealed class BlobConnectionOptions
 {
-    public string BlobServiceUri  { get; set; } = "";
-    public string QueueServiceUri { get; set; } = "";
+    public string BlobServiceUri { get; set; } = "";
 }
 

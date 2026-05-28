@@ -1,11 +1,13 @@
 using Azure.Core;
 using Azure.Identity;
 using Azure.Storage.Blobs;
+using Azure.Storage.Queues;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using OrigenateFunction.Abstractions;
 using OrigenateFunction.Dataverse;
 using OrigenateFunction.Excel;
@@ -37,61 +39,52 @@ var host = new HostBuilder()
         services.AddOptions<BlobConnectionOptions>()
             .Configure<IConfiguration>((o, c) => c.GetSection("BlobConnection").Bind(o));
 
-        // DefaultAzureCredential chain switches based on IS_LOCAL_DEV:
-        //   local  → Az CLI + Interactive Browser; Managed Identity excluded
-        //   prod   → Managed Identity (and Workload Identity for AKS); CLI/Browser excluded
-        // Other sources (Env, SharedTokenCache, VS, VSCode, PowerShell, AZD) are always
-        // excluded — they frequently pick up stale tokens or wrong-tenant principals and
-        // cause 403 AuthorizationPermissionMismatch even when the *intended* account has
-        // the right RBAC roles.
+        // Identity-only storage auth. In Azure the deployed function's Managed
+        // Identity picks up the storage roles; locally `az login` / VS sign-in
+        // supplies the credential. ManagedIdentityCredential is excluded only in
+        // local dev so we don't waste time probing an IMDS endpoint that doesn't
+        // exist on a dev box (and can't accidentally pick up a stray VM/proxy
+        // identity that lacks the storage RBAC roles).
+        //
+        // InteractiveBrowserCredential is opt-in (UseInteractiveBrowser=true) for
+        // locked-down workstations where `az login` isn't viable.
         services.AddSingleton<TokenCredential>(sp =>
         {
-            var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<OrigenateOptions>>().Value;
-            var cfg = sp.GetRequiredService<IConfiguration>();
-            var isLocal = string.Equals(cfg["IS_LOCAL_DEV"], "true", StringComparison.OrdinalIgnoreCase);
-
+            var opts = sp.GetRequiredService<IOptions<OrigenateOptions>>().Value;
             return new DefaultAzureCredential(new DefaultAzureCredentialOptions
             {
-                ExcludeEnvironmentCredential = true,
-                ExcludeSharedTokenCacheCredential = true,
-                ExcludeVisualStudioCredential = true,
-                ExcludeVisualStudioCodeCredential = true,
-                ExcludeAzurePowerShellCredential = true,
-                ExcludeAzureDeveloperCliCredential = true,
-
-                // Local: developer auth only (CLI + optional interactive browser).
-                // Prod:  managed identity (and workload identity for AKS); no human sign-in.
-                ExcludeAzureCliCredential          = !isLocal,
-                ExcludeInteractiveBrowserCredential = !isLocal || !opts.UseInteractiveBrowser,
-                ExcludeManagedIdentityCredential    =  isLocal,
-                ExcludeWorkloadIdentityCredential   =  isLocal,
-
+                ExcludeManagedIdentityCredential    = IsLocalDev(),
+                ExcludeInteractiveBrowserCredential = !opts.UseInteractiveBrowser,
                 TenantId = string.IsNullOrWhiteSpace(opts.AzureTenantId) ? null : opts.AzureTenantId
             });
         });
 
-        // BlobServiceClient — identity-based only. Resolves via BlobConnection__blobServiceUri
-        // (e.g. "https://<account>.blob.core.windows.net") and authenticates with the
-        // shared TokenCredential (DefaultAzureCredential chain: Az CLI / Interactive Browser
-        // locally, Managed Identity in Azure).
-        // The caller principal must hold "Storage Blob Data Contributor" on the account
-        // (and "Storage Queue Data Contributor" for the BlobTrigger's hidden queue).
+        // BlobServiceClient — identity-based, resolves from BlobConnection__blobServiceUri
+        // (e.g. "https://<account>.blob.core.windows.net"). Caller principal needs
+        // "Storage Blob Data Contributor" on the account.
         services.AddSingleton(sp =>
         {
-            var blobUri = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<BlobConnectionOptions>>().Value.BlobServiceUri;
-            if (string.IsNullOrWhiteSpace(blobUri) || LooksLikePlaceholder(blobUri))
-                throw new InvalidOperationException(
-                    "BlobConnection__blobServiceUri is not configured. In local.settings.json set " +
-                    "'BlobConnection__blobServiceUri' to your blob endpoint, e.g. " +
-                    "'https://<account>.blob.core.windows.net'. Also set 'BlobConnection__queueServiceUri' " +
-                    "to the queue endpoint — the BlobTrigger needs both. The signed-in identity must hold " +
-                    "'Storage Blob Data Contributor' + 'Storage Queue Data Contributor' on the account.");
-
+            var blobUri = sp.GetRequiredService<IOptions<BlobConnectionOptions>>().Value.BlobServiceUri;
+            RequireUri(blobUri, "BlobConnection__blobServiceUri");
             return new BlobServiceClient(new Uri(blobUri), sp.GetRequiredService<TokenCredential>());
+        });
 
-            static bool LooksLikePlaceholder(string? value)
-                => !string.IsNullOrWhiteSpace(value)
-                   && (value.StartsWith('<') || value.Contains("PASTE_", StringComparison.OrdinalIgnoreCase));
+        // QueueServiceClient — queue URI is derived from the blob URI by swapping
+        // .blob. → .queue., so blob + queue share the same storage account (one
+        // identity grant). Caller principal needs "Storage Queue Data Contributor".
+        //
+        // MessageEncoding = Base64 matches the WebJobs QueueTrigger extension's
+        // default decoding; without it, queue-trigger consumers would log
+        // "Message decoding has failed!" and dead-letter every message.
+        services.AddSingleton(sp =>
+        {
+            var blobUri = sp.GetRequiredService<IOptions<BlobConnectionOptions>>().Value.BlobServiceUri;
+            RequireUri(blobUri, "BlobConnection__blobServiceUri");
+            var queueUri = new Uri(blobUri.Replace(".blob.core.windows.net", ".queue.core.windows.net"));
+            return new QueueServiceClient(
+                queueUri,
+                sp.GetRequiredService<TokenCredential>(),
+                new QueueClientOptions { MessageEncoding = QueueMessageEncoding.Base64 });
         });
 
         // Dataverse — ServiceClient SDK with cached token + Polly resilience pipeline.
@@ -136,3 +129,30 @@ var host = new HostBuilder()
     .Build();
 
 await host.RunAsync();
+
+// Core Tools sets AZURE_FUNCTIONS_ENVIRONMENT=Development for `func start`; the
+// deployed Function App leaves it unset (or set to Production), so this cleanly
+// separates the two without inspecting connection-string shape.
+static bool IsLocalDev() =>
+    string.Equals(
+        Environment.GetEnvironmentVariable("AZURE_FUNCTIONS_ENVIRONMENT"),
+        "Development",
+        StringComparison.OrdinalIgnoreCase);
+
+static void RequireUri(string value, string keyName)
+{
+    if (string.IsNullOrWhiteSpace(value))
+        throw new InvalidOperationException(
+            $"{keyName} is not configured. Set it in local.settings.json to your blob endpoint, " +
+            $"e.g. 'https://<account>.blob.core.windows.net'. The signed-in identity must hold " +
+            $"'Storage Blob Data Contributor' + 'Storage Queue Data Contributor' on the account.");
+    if (value.Contains('<') || value.Contains('>') ||
+        value.Contains("PASTE_", StringComparison.OrdinalIgnoreCase) ||
+        value.Contains("STORAGE_ACCOUNT", StringComparison.OrdinalIgnoreCase))
+        throw new InvalidOperationException(
+            $"{keyName} still contains a placeholder ('{value}'). " +
+            $"Replace '<STORAGE_ACCOUNT>' with your real Azure Storage account name.");
+    if (!Uri.IsWellFormedUriString(value, UriKind.Absolute))
+        throw new InvalidOperationException(
+            $"{keyName}='{value}' is not a well-formed absolute URI.");
+}

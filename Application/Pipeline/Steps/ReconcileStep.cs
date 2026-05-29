@@ -15,15 +15,16 @@ public sealed class ReconcileStep : IPipelineStep
     private readonly StgOrigenateRepository _stg;
     private readonly HoldingRepository _holding;
     private readonly EntityProjector _projector;
+    private readonly EntityBuilder _builder;
     private readonly OrigenateOptions _opts;
     private readonly ILogger<ReconcileStep> _log;
 
     public ReconcileStep(
         StgOrigenateRepository stg, HoldingRepository holding,
-        EntityProjector projector,
+        EntityProjector projector, EntityBuilder builder,
         IOptions<OrigenateOptions> opts, ILogger<ReconcileStep> log)
     {
-        _stg = stg; _holding = holding; _projector = projector;
+        _stg = stg; _holding = holding; _projector = projector; _builder = builder;
         _opts = opts.Value; _log = log;
     }
 
@@ -63,6 +64,11 @@ public sealed class ReconcileStep : IPipelineStep
         const int chunkSize = 500;
         var present = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        // Pre-fetch STG schema once so HOLDING rows can be re-coerced to STG column
+        // types on the way back (the two tables can type the same business field
+        // differently). Cached for the host lifetime, so re-fetching per page is cheap.
+        var stgAttrs = await _builder.GetAttributesAsync(_stg.EntityLogicalName, ct);
+
         for (int i = 0; i < holdingAppNumbers.Count; i += chunkSize)
         {
             var slice = holdingAppNumbers.Skip(i).Take(chunkSize).ToArray();
@@ -90,9 +96,10 @@ public sealed class ReconcileStep : IPipelineStep
                 // Reading HOLDING (its own logical names) → writing STG: translate field
                 // names back via HoldingToStgField so the renamed primary/secondary/CLTV
                 // columns land in their STG equivalents.
-                buffer.Add(_projector.Project(
+                buffer.Add(_builder.ProjectCoerced(
                     item,
                     _stg.EntityLogicalName,
+                    stgAttrs,
                     ColumnMap.HoldingBusinessFields,
                     ColumnMap.HoldingToStgField));
                 if (buffer.Count >= _opts.InsertBatchSize)

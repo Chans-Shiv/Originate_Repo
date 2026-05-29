@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using OrigenateFunction.Domain.Models;
 using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Metadata;
 using OrigenateFunction.Infrastructure.Dataverse;
 using OrigenateFunction.Domain.Entities;
 
@@ -47,9 +48,52 @@ public sealed class EntityBuilder
         return e;
     }
 
+    // Pre-fetches a target table's attribute metadata (cached for the host's lifetime).
+    // Callers that project many rows fetch once, then reuse for each ProjectCoerced call.
+    public Task<IReadOnlyDictionary<string, AttributeMetadata>> GetAttributesAsync(
+        string targetLogicalName, CancellationToken ct)
+        => _schema.GetAttributesAsync(targetLogicalName, ct);
+
+    // Projects a source Dataverse entity into the target table, re-coercing every value
+    // to the TARGET column's type. Used when copying between STG and HOLDING, whose
+    // columns share business meaning but can have different Dataverse types (e.g. an
+    // Integer on one, Decimal/Money on the other) — a raw copy would throw
+    // "Incorrect type of attribute value". Values read back from Dataverse arrive as
+    // SDK wrappers (Money, OptionSetValue, …); Unwrap turns them back into the scalar
+    // the coercer understands before re-coercing to the target type.
+    //
+    // fieldRenames maps source logical name → target logical name (null = same name).
+    public Entity ProjectCoerced(
+        Entity source,
+        string targetLogicalName,
+        IReadOnlyDictionary<string, AttributeMetadata> targetAttrs,
+        IEnumerable<string> sourceFields,
+        IReadOnlyDictionary<string, string>? fieldRenames)
+    {
+        var e = new Entity(targetLogicalName);
+        foreach (var f in sourceFields)
+        {
+            if (!source.Contains(f) || source[f] is null) continue;
+            var targetField = fieldRenames is not null && fieldRenames.TryGetValue(f, out var renamed)
+                ? renamed
+                : f;
+            TrySet(e, targetAttrs, targetField, Unwrap(source[f]), 0, targetLogicalName);
+        }
+        return e;
+    }
+
+    // Turns Dataverse SDK wrapper types back into the scalar the coercer can re-parse.
+    private static object? Unwrap(object? v) => v switch
+    {
+        Money m => m.Value,
+        OptionSetValue o => o.Value,
+        AliasedValue a => a.Value,
+        _ => v
+    };
+
     private void TrySet(
         Entity entity,
-        IReadOnlyDictionary<string, Microsoft.Xrm.Sdk.Metadata.AttributeMetadata> attrs,
+        IReadOnlyDictionary<string, AttributeMetadata> attrs,
         string field, object? raw, int rowNum, string logical)
     {
         if (raw is null) return;

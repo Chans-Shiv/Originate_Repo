@@ -1,9 +1,9 @@
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
-using OrigenateFunction.Domain.Interfaces;
-using OrigenateFunction.Domain.Models;
+using Fhn.Originate.FtbanknewSync.Domain.Interfaces;
+using Fhn.Originate.FtbanknewSync.Domain.Models;
 
-namespace OrigenateFunction.Application.Pipeline;
+namespace Fhn.Originate.FtbanknewSync.Application.Pipeline;
 
 // Strategy pattern: orchestrator iterates over IPipelineStep — closed for modification.
 public sealed class PipelineExecutor

@@ -1,7 +1,7 @@
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
 
-namespace OrigenateFunction.Domain.Interfaces;
+namespace Fhn.Originate.FtbanknewSync.Domain.Interfaces;
 
 public sealed record RowWriteResult(bool Success, string? Error)
 {

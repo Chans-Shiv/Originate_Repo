@@ -3,7 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Metadata;
 
-namespace OrigenateFunction.Infrastructure.Dataverse;
+namespace Fhn.Originate.FtbanknewSync.Infrastructure.Dataverse;
 
 // One async fetch per table for the lifetime of the host; subsequent callers
 // re-use the cached Task. Keys = entity logical name (case-insensitive).

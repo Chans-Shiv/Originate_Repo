@@ -1,6 +1,6 @@
 using Microsoft.Xrm.Sdk;
 
-namespace OrigenateFunction.Domain.Entities;
+namespace Fhn.Originate.FtbanknewSync.Domain.Entities;
 
 public sealed class OrigenateRow
 {

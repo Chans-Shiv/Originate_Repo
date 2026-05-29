@@ -1,6 +1,6 @@
-using OrigenateFunction.Domain.Entities;
+using Fhn.Originate.FtbanknewSync.Domain.Entities;
 
-namespace OrigenateFunction.Domain.Models;
+namespace Fhn.Originate.FtbanknewSync.Domain.Models;
 
 public sealed class PipelineContext
 {

@@ -1,11 +1,11 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using OrigenateFunction.Domain.Interfaces;
-using OrigenateFunction.Domain.Models;
-using OrigenateFunction.Domain.Entities;
-using OrigenateFunction.Configuration;
+using Fhn.Originate.FtbanknewSync.Domain.Interfaces;
+using Fhn.Originate.FtbanknewSync.Domain.Models;
+using Fhn.Originate.FtbanknewSync.Domain.Entities;
+using Fhn.Originate.FtbanknewSync.Configuration;
 
-namespace OrigenateFunction.Infrastructure.Repositories;
+namespace Fhn.Originate.FtbanknewSync.Infrastructure.Repositories;
 
 public sealed class StgOrigenateRepository : TableRepositoryBase
 {

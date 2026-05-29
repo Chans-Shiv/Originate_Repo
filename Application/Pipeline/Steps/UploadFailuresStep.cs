@@ -1,8 +1,8 @@
 using Microsoft.Extensions.Logging;
-using OrigenateFunction.Domain.Interfaces;
-using OrigenateFunction.Domain.Models;
+using Fhn.Originate.FtbanknewSync.Domain.Interfaces;
+using Fhn.Originate.FtbanknewSync.Domain.Models;
 
-namespace OrigenateFunction.Application.Pipeline.Steps;
+namespace Fhn.Originate.FtbanknewSync.Application.Pipeline.Steps;
 
 public sealed class UploadFailuresStep : IPipelineStep
 {

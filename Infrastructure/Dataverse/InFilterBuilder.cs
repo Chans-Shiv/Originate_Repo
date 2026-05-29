@@ -1,6 +1,6 @@
 using Microsoft.Xrm.Sdk.Query;
 
-namespace OrigenateFunction.Infrastructure.Dataverse;
+namespace Fhn.Originate.FtbanknewSync.Infrastructure.Dataverse;
 
 public static class InFilterBuilder
 {

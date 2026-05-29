@@ -2,11 +2,11 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
-using OrigenateFunction.Domain.Interfaces;
-using OrigenateFunction.Domain.Models;
-using OrigenateFunction.Configuration;
+using Fhn.Originate.FtbanknewSync.Domain.Interfaces;
+using Fhn.Originate.FtbanknewSync.Domain.Models;
+using Fhn.Originate.FtbanknewSync.Configuration;
 
-namespace OrigenateFunction.Infrastructure.Dataverse;
+namespace Fhn.Originate.FtbanknewSync.Infrastructure.Dataverse;
 
 // Bulk insert via ExecuteMultipleRequest (CreateRequest, ContinueOnError).
 // Two-stage retry: full batch → short delay → retry of failed-only records.

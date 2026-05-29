@@ -1,12 +1,12 @@
 using System.Text.Json;
 using Azure.Storage.Queues;
 using Microsoft.Extensions.Logging;
-using OrigenateFunction.Diagnostics;
-using OrigenateFunction.Domain.Entities;
-using OrigenateFunction.Domain.Interfaces;
-using OrigenateFunction.Domain.Models;
+using Fhn.Originate.FtbanknewSync.Diagnostics;
+using Fhn.Originate.FtbanknewSync.Domain.Entities;
+using Fhn.Originate.FtbanknewSync.Domain.Interfaces;
+using Fhn.Originate.FtbanknewSync.Domain.Models;
 
-namespace OrigenateFunction.Infrastructure.DeadLetter;
+namespace Fhn.Originate.FtbanknewSync.Infrastructure.DeadLetter;
 
 // Durable buffer in front of the Dataverse error table.
 //

@@ -2,14 +2,14 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
-using OrigenateFunction.Domain.Interfaces;
-using OrigenateFunction.Domain.Models;
-using OrigenateFunction.Infrastructure.Dataverse;
-using OrigenateFunction.Domain.Entities;
-using OrigenateFunction.Configuration;
-using OrigenateFunction.Infrastructure.Repositories;
+using Fhn.Originate.FtbanknewSync.Domain.Interfaces;
+using Fhn.Originate.FtbanknewSync.Domain.Models;
+using Fhn.Originate.FtbanknewSync.Infrastructure.Dataverse;
+using Fhn.Originate.FtbanknewSync.Domain.Entities;
+using Fhn.Originate.FtbanknewSync.Configuration;
+using Fhn.Originate.FtbanknewSync.Infrastructure.Repositories;
 
-namespace OrigenateFunction.Application.Pipeline.Steps;
+namespace Fhn.Originate.FtbanknewSync.Application.Pipeline.Steps;
 
 public sealed class BackupOldRowsStep : IPipelineStep
 {

@@ -1,4 +1,4 @@
-namespace OrigenateFunction.Diagnostics;
+namespace Fhn.Originate.FtbanknewSync.Diagnostics;
 
 // Canonical event-name vocabulary for structured logs. Every EventName= value
 // the app emits comes from here, so dashboards and KQL queries that filter on

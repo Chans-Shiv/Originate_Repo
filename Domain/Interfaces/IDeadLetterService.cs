@@ -1,6 +1,6 @@
-using OrigenateFunction.Domain.Models;
+using Fhn.Originate.FtbanknewSync.Domain.Models;
 
-namespace OrigenateFunction.Domain.Interfaces;
+namespace Fhn.Originate.FtbanknewSync.Domain.Interfaces;
 
 // Persists row-level failures so they can be retried/audited later.
 // Implementation: one Storage Queue message per failed row →

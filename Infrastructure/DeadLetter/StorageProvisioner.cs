@@ -3,9 +3,9 @@ using Azure.Storage.Queues;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using OrigenateFunction.Configuration;
+using Fhn.Originate.FtbanknewSync.Configuration;
 
-namespace OrigenateFunction.Infrastructure.DeadLetter;
+namespace Fhn.Originate.FtbanknewSync.Infrastructure.DeadLetter;
 
 // Runs once at host startup, BEFORE function listeners begin polling, and
 // ensures the dead-letter queue + error-archive container exist. Without

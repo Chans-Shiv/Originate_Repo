@@ -1,11 +1,11 @@
 using Microsoft.Extensions.Logging;
-using OrigenateFunction.Domain.Models;
+using Fhn.Originate.FtbanknewSync.Domain.Models;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Metadata;
-using OrigenateFunction.Infrastructure.Dataverse;
-using OrigenateFunction.Domain.Entities;
+using Fhn.Originate.FtbanknewSync.Infrastructure.Dataverse;
+using Fhn.Originate.FtbanknewSync.Domain.Entities;
 
-namespace OrigenateFunction.Infrastructure.Dataverse;
+namespace Fhn.Originate.FtbanknewSync.Infrastructure.Dataverse;
 
 // Builds typed SDK Entity objects from row models, using the schema cache
 // to look up each target column's AttributeMetadata and the coercer to

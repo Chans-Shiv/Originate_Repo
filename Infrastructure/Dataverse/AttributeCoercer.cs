@@ -2,7 +2,7 @@ using System.Globalization;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Metadata;
 
-namespace OrigenateFunction.Infrastructure.Dataverse;
+namespace Fhn.Originate.FtbanknewSync.Infrastructure.Dataverse;
 
 // Coerces a raw cell value (typically a string from Excel) into the SDK type
 // expected by the target attribute. Returns false when the value can't be parsed —

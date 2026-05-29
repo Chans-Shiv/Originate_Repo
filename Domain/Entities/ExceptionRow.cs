@@ -1,7 +1,7 @@
 using Microsoft.Xrm.Sdk;
-using OrigenateFunction.Domain.Models;
+using Fhn.Originate.FtbanknewSync.Domain.Models;
 
-namespace OrigenateFunction.Domain.Entities;
+namespace Fhn.Originate.FtbanknewSync.Domain.Entities;
 
 public sealed record ExceptionRow(
     string ApplicationNumber,

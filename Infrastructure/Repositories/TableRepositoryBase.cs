@@ -2,11 +2,11 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Query;
-using OrigenateFunction.Domain.Interfaces;
-using OrigenateFunction.Domain.Models;
-using OrigenateFunction.Configuration;
+using Fhn.Originate.FtbanknewSync.Domain.Interfaces;
+using Fhn.Originate.FtbanknewSync.Domain.Models;
+using Fhn.Originate.FtbanknewSync.Configuration;
 
-namespace OrigenateFunction.Infrastructure.Repositories;
+namespace Fhn.Originate.FtbanknewSync.Infrastructure.Repositories;
 
 public abstract class TableRepositoryBase
 {

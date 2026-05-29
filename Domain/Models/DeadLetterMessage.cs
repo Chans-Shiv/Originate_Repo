@@ -1,4 +1,4 @@
-namespace OrigenateFunction.Domain.Models;
+namespace Fhn.Originate.FtbanknewSync.Domain.Models;
 
 // Wire format for one failed Excel row pushed onto the dead-letter Storage Queue.
 // Each message is processed independently by DeadLetterProcessorFunction:

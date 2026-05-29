@@ -9,7 +9,7 @@
     },
     "logLevel": {
       "default": "Information",
-      "OrigenateFunction": "Information",
+      "Fhn.Originate.FtbanknewSync": "Information",
       "Host.Aggregator": "Warning"
     }
   },

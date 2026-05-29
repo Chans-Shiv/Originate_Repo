@@ -1,4 +1,4 @@
-namespace OrigenateFunction.Domain.Entities;
+namespace Fhn.Originate.FtbanknewSync.Domain.Entities;
 
 // Single source of truth for table + column names.
 public static class ColumnMap

@@ -8,16 +8,16 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using OrigenateFunction.Application.Pipeline;
-using OrigenateFunction.Application.Pipeline.Steps;
-using OrigenateFunction.Configuration;
-using OrigenateFunction.Domain.Interfaces;
-using OrigenateFunction.Domain.Models;
-using OrigenateFunction.Infrastructure.Dataverse;
-using OrigenateFunction.Infrastructure.DeadLetter;
-using OrigenateFunction.Infrastructure.Excel;
-using OrigenateFunction.Infrastructure.Repositories;
-using OrigenateFunction.Infrastructure.Storage;
+using Fhn.Originate.FtbanknewSync.Application.Pipeline;
+using Fhn.Originate.FtbanknewSync.Application.Pipeline.Steps;
+using Fhn.Originate.FtbanknewSync.Configuration;
+using Fhn.Originate.FtbanknewSync.Domain.Interfaces;
+using Fhn.Originate.FtbanknewSync.Domain.Models;
+using Fhn.Originate.FtbanknewSync.Infrastructure.Dataverse;
+using Fhn.Originate.FtbanknewSync.Infrastructure.DeadLetter;
+using Fhn.Originate.FtbanknewSync.Infrastructure.Excel;
+using Fhn.Originate.FtbanknewSync.Infrastructure.Repositories;
+using Fhn.Originate.FtbanknewSync.Infrastructure.Storage;
 using System.Text.Json;
 
 var host = new HostBuilder()

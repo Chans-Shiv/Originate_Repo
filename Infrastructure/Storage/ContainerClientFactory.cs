@@ -1,8 +1,8 @@
 using Azure.Storage.Blobs;
 using Microsoft.Extensions.Options;
-using OrigenateFunction.Configuration;
+using Fhn.Originate.FtbanknewSync.Configuration;
 
-namespace OrigenateFunction.Infrastructure.Storage;
+namespace Fhn.Originate.FtbanknewSync.Infrastructure.Storage;
 
 // Factory pattern — single source of truth for resolving each named container.
 public sealed class ContainerClientFactory

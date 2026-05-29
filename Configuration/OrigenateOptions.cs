@@ -1,4 +1,4 @@
-namespace OrigenateFunction.Configuration;
+namespace Fhn.Originate.FtbanknewSync.Configuration;
 
 public sealed class OrigenateOptions
 {

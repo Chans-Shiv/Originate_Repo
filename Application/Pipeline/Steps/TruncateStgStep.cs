@@ -1,9 +1,9 @@
 using Microsoft.Extensions.Logging;
-using OrigenateFunction.Domain.Interfaces;
-using OrigenateFunction.Domain.Models;
-using OrigenateFunction.Infrastructure.Repositories;
+using Fhn.Originate.FtbanknewSync.Domain.Interfaces;
+using Fhn.Originate.FtbanknewSync.Domain.Models;
+using Fhn.Originate.FtbanknewSync.Infrastructure.Repositories;
 
-namespace OrigenateFunction.Application.Pipeline.Steps;
+namespace Fhn.Originate.FtbanknewSync.Application.Pipeline.Steps;
 
 public sealed class TruncateStgStep : IPipelineStep
 {

@@ -1,10 +1,10 @@
 using System.Text;
 using Azure.Storage.Blobs.Models;
 using Microsoft.Extensions.Logging;
-using OrigenateFunction.Domain.Interfaces;
-using OrigenateFunction.Domain.Models;
+using Fhn.Originate.FtbanknewSync.Domain.Interfaces;
+using Fhn.Originate.FtbanknewSync.Domain.Models;
 
-namespace OrigenateFunction.Infrastructure.Storage;
+namespace Fhn.Originate.FtbanknewSync.Infrastructure.Storage;
 
 public sealed class BlobFailureFileWriter : IFailureFileWriter
 {

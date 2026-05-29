@@ -1,10 +1,10 @@
 using Microsoft.Extensions.Logging;
-using OrigenateFunction.Domain.Interfaces;
-using OrigenateFunction.Domain.Models;
-using OrigenateFunction.Infrastructure.Dataverse;
-using OrigenateFunction.Domain.Entities;
+using Fhn.Originate.FtbanknewSync.Domain.Interfaces;
+using Fhn.Originate.FtbanknewSync.Domain.Models;
+using Fhn.Originate.FtbanknewSync.Infrastructure.Dataverse;
+using Fhn.Originate.FtbanknewSync.Domain.Entities;
 
-namespace OrigenateFunction.Application.Pipeline.Steps;
+namespace Fhn.Originate.FtbanknewSync.Application.Pipeline.Steps;
 
 public sealed class LoadSchemaStep : IPipelineStep
 {

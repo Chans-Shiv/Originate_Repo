@@ -2,9 +2,9 @@ using Azure.Core;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.PowerPlatform.Dataverse.Client;
-using OrigenateFunction.Configuration;
+using Fhn.Originate.FtbanknewSync.Configuration;
 
-namespace OrigenateFunction.Infrastructure.Dataverse;
+namespace Fhn.Originate.FtbanknewSync.Infrastructure.Dataverse;
 
 // Owns the ServiceClient + a cached AAD token with single-flight refresh.
 // Without caching, every Dataverse call re-runs DefaultAzureCredential — under

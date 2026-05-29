@@ -1,6 +1,6 @@
 using Microsoft.Xrm.Sdk;
 
-namespace OrigenateFunction.Infrastructure.Dataverse;
+namespace Fhn.Originate.FtbanknewSync.Infrastructure.Dataverse;
 
 // Projects an Entity from one logical table to another by copying the requested
 // attributes. Used to copy business fields from STG → HOLDING during the backup

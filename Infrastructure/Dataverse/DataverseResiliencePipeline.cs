@@ -1,10 +1,10 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using OrigenateFunction.Configuration;
+using Fhn.Originate.FtbanknewSync.Configuration;
 using Polly;
 using Polly.Retry;
 
-namespace OrigenateFunction.Infrastructure.Dataverse;
+namespace Fhn.Originate.FtbanknewSync.Infrastructure.Dataverse;
 
 // Polly resilience pipeline tuned for Dataverse throttling (429) and Server Busy (503).
 // Wrap any Dataverse SDK call with this — it catches the typical transient classes

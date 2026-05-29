@@ -1,10 +1,10 @@
 using System.Text.Json;
 using Azure.Storage.Blobs;
 using Microsoft.Extensions.Logging;
-using OrigenateFunction.Diagnostics;
-using OrigenateFunction.Domain.Models;
+using Fhn.Originate.FtbanknewSync.Diagnostics;
+using Fhn.Originate.FtbanknewSync.Domain.Models;
 
-namespace OrigenateFunction.Infrastructure.DeadLetter;
+namespace Fhn.Originate.FtbanknewSync.Infrastructure.DeadLetter;
 
 // Durable archive for records that exhausted all queue-retry attempts.
 //

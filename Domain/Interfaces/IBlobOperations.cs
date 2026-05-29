@@ -1,5 +1,5 @@
-namespace OrigenateFunction.Domain.Interfaces;
-using OrigenateFunction.Domain.Models;
+namespace Fhn.Originate.FtbanknewSync.Domain.Interfaces;
+using Fhn.Originate.FtbanknewSync.Domain.Models;
 
 public interface IBlobArchiver
 {

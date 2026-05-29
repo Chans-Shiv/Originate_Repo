@@ -1,7 +1,7 @@
 using Microsoft.Crm.Sdk.Messages;
 using Microsoft.Xrm.Sdk;
 
-namespace OrigenateFunction.Infrastructure.Dataverse;
+namespace Fhn.Originate.FtbanknewSync.Infrastructure.Dataverse;
 
 public sealed class DataverseConnectivityCheck
 {

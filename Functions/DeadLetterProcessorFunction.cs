@@ -1,12 +1,12 @@
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using OrigenateFunction.Configuration;
-using OrigenateFunction.Diagnostics;
-using OrigenateFunction.Domain.Models;
-using OrigenateFunction.Infrastructure.DeadLetter;
+using Fhn.Originate.FtbanknewSync.Configuration;
+using Fhn.Originate.FtbanknewSync.Diagnostics;
+using Fhn.Originate.FtbanknewSync.Domain.Models;
+using Fhn.Originate.FtbanknewSync.Infrastructure.DeadLetter;
 
-namespace OrigenateFunction.Functions;
+namespace Fhn.Originate.FtbanknewSync.Functions;
 
 // Drains the dead-letter Storage Queue into the Dataverse error table.
 //

@@ -1,12 +1,12 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
-using OrigenateFunction.Diagnostics;
-using OrigenateFunction.Domain.Entities;
-using OrigenateFunction.Domain.Models;
-using OrigenateFunction.Infrastructure.Dataverse;
+using Fhn.Originate.FtbanknewSync.Diagnostics;
+using Fhn.Originate.FtbanknewSync.Domain.Entities;
+using Fhn.Originate.FtbanknewSync.Domain.Models;
+using Fhn.Originate.FtbanknewSync.Infrastructure.Dataverse;
 
-namespace OrigenateFunction.Infrastructure.DeadLetter;
+namespace Fhn.Originate.FtbanknewSync.Infrastructure.DeadLetter;
 
 // Writes a single failed record (delivered via Storage Queue) into the Dataverse
 // error table. Exceptions are intentionally NOT caught — the QueueTrigger runtime

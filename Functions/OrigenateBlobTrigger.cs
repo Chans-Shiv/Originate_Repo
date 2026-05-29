@@ -1,11 +1,11 @@
 using System.Diagnostics;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
-using OrigenateFunction.Domain.Interfaces;
-using OrigenateFunction.Domain.Models;
-using OrigenateFunction.Application.Pipeline;
+using Fhn.Originate.FtbanknewSync.Domain.Interfaces;
+using Fhn.Originate.FtbanknewSync.Domain.Models;
+using Fhn.Originate.FtbanknewSync.Application.Pipeline;
 
-namespace OrigenateFunction.Functions;
+namespace Fhn.Originate.FtbanknewSync.Functions;
 
 public sealed class OrigenateBlobTrigger
 {

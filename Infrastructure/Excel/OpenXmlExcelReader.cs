@@ -2,9 +2,9 @@ using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Spreadsheet;
 using Microsoft.Extensions.Logging;
-using OrigenateFunction.Domain.Entities;
+using Fhn.Originate.FtbanknewSync.Domain.Entities;
 
-namespace OrigenateFunction.Infrastructure.Excel;
+namespace Fhn.Originate.FtbanknewSync.Infrastructure.Excel;
 
 public sealed class OpenXmlExcelReader
 {

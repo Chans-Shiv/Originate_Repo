@@ -51,7 +51,7 @@ public sealed class BackupOldRowsStep : IPipelineStep
                 item,
                 _holding.EntityLogicalName,
                 ColumnMap.StgBusinessFields,
-                ColumnMap.HoldingFieldByStgField));
+                ColumnMap.StgToHoldingField));
             if (buffer.Count >= _opts.InsertBatchSize)
             {
                 batchNum++;

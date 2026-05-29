@@ -36,7 +36,10 @@ public static class ColumnMap
     // so "ACCOUNT NUMBER" and "Account Number" both match — but spacing matters.
     // For the income-verification-flag column we accept both "Flg" and "F1g" spellings
     // because we've seen the source workbook use the latter (digit-1) in some files.
-    public static readonly IReadOnlyDictionary<string, string> ExcelHeaderToDataverse =
+    // STG mapping: Excel header → STG_ORIGENATE (dmt_loanapplication) logical name.
+    // HOLDING has the SAME display headers but a subset of DIFFERENT logical names —
+    // see HoldingHeaderOverrides + HoldingExcelHeaderToDataverse below.
+    public static readonly IReadOnlyDictionary<string, string> StgExcelHeaderToDataverse =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             { "Account Number", PublisherPrefix + "accountnumber" },
@@ -162,65 +165,109 @@ public static class ColumnMap
             PolicyExceptionsReasonField,
         };
 
-    // Business fields copied between STG and HOLDING (exception columns excluded).
-    public static readonly IReadOnlyList<string> StgBusinessFields =
-        ExcelHeaderToDataverse.Values
-            .Where(v => !ExcludedFromStg.Contains(v))
-            .Distinct()
-            .ToArray();
-
-    // ── HOLDING table field renames ──
-    // STG and HOLDING share most logical names, but a handful diverge:
-    //   - Borrower 1/2 are renamed to primary/secondary applicant
-    //   - CLTV columns use the long "combinedloantovalue" form on HOLDING
-    //   - Approving Last Officer Associate uses a slightly different name
-    // Any STG field NOT in this dictionary is assumed to use the SAME logical
-    // name on HOLDING. EntityProjector consults this map when projecting an
-    // STG entity into a HOLDING entity.
-    public static readonly IReadOnlyDictionary<string, string> HoldingFieldByStgField =
+    // ── HOLDING logical-name overrides (keyed by Excel header) ──
+    // STG and HOLDING use the SAME Excel display headers, but a subset of columns
+    // have DIFFERENT Dataverse logical names on HOLDING. This lists ONLY the
+    // divergences; any header not here uses the same logical name on both tables.
+    //   - Borrower 1/2 → primary/secondary applicant
+    //   - CLTV variants → long "combinedloantovalue" form
+    //   - Approving Last Officer Associate → "associated" suffix
+    private static readonly IReadOnlyDictionary<string, string> HoldingHeaderOverrides =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             // Borrower 1 → primary applicant
-            [PublisherPrefix + "creditscoreb1"]                = PublisherPrefix + "primarycreditscore",
-            [PublisherPrefix + "dateofbirthb1"]                = PublisherPrefix + "primarydateofbirth",
-            [PublisherPrefix + "employmentstartdateb1"]        = PublisherPrefix + "primaryemploymentstartdate",
-            [PublisherPrefix + "employercountb1"]              = PublisherPrefix + "primaryemployercount",
-            [PublisherPrefix + "employernameb1"]               = PublisherPrefix + "primaryemployername",
-            [PublisherPrefix + "incomeverificationflagb1"]     = PublisherPrefix + "primaryincomeverifiedflag",
-            [PublisherPrefix + "incomeverificationmethodb1"]   = PublisherPrefix + "primaryincomeverificationmethod",
-            [PublisherPrefix + "incomeb1"]                     = PublisherPrefix + "primaryincome",
-            [PublisherPrefix + "employmentlengthmonthsb1"]     = PublisherPrefix + "primaryemploymentlengthmonths",
-            [PublisherPrefix + "employmentlengthyearsb1"]      = PublisherPrefix + "primaryemploymentlengthyears",
-            [PublisherPrefix + "nameb1"]                       = PublisherPrefix + "primaryapplicantname",
-            [PublisherPrefix + "occupationtitleb1"]            = PublisherPrefix + "primaryoccupationtitle",
-            [PublisherPrefix + "previousemploymentmonthsb1"]   = PublisherPrefix + "primarypreviousemploymentmonths",
-            [PublisherPrefix + "previousemploymentyearsb1"]    = PublisherPrefix + "primarypreviousemploymentyears",
-            [PublisherPrefix + "selfemployedb1"]               = PublisherPrefix + "primaryselfemployedflag",
-            [PublisherPrefix + "ssnb1"]                        = PublisherPrefix + "primaryssn",
+            { "B1 Credit Score",            PublisherPrefix + "primarycreditscore" },
+            { "B1 Date Of Birth",           PublisherPrefix + "primarydateofbirth" },
+            { "B1 Empl Start Date",         PublisherPrefix + "primaryemploymentstartdate" },
+            { "B1 Employer Count",          PublisherPrefix + "primaryemployercount" },
+            { "B1 Employer Name",           PublisherPrefix + "primaryemployername" },
+            { "B1 Inc Verif Flg",           PublisherPrefix + "primaryincomeverifiedflag" },
+            { "B1 Inc Verif F1g",           PublisherPrefix + "primaryincomeverifiedflag" },
+            { "B1 Inc Verif Method",        PublisherPrefix + "primaryincomeverificationmethod" },
+            { "B1 Income",                  PublisherPrefix + "primaryincome" },
+            { "B1 Length Employed Months",  PublisherPrefix + "primaryemploymentlengthmonths" },
+            { "B1 Length Employed Years",   PublisherPrefix + "primaryemploymentlengthyears" },
+            { "B1 Name",                    PublisherPrefix + "primaryapplicantname" },
+            { "B1 Occupation Title",        PublisherPrefix + "primaryoccupationtitle" },
+            { "B1 Prev Employ Months",      PublisherPrefix + "primarypreviousemploymentmonths" },
+            { "B1 Prev Employ Years",       PublisherPrefix + "primarypreviousemploymentyears" },
+            { "B1 Self Employed",           PublisherPrefix + "primaryselfemployedflag" },
+            { "B1 SSN",                     PublisherPrefix + "primaryssn" },
 
             // Borrower 2 → secondary applicant
-            [PublisherPrefix + "creditscoreb2"]                = PublisherPrefix + "secondarycreditscore",
-            [PublisherPrefix + "dateofbirthb2"]                = PublisherPrefix + "secondarydateofbirth",
-            [PublisherPrefix + "employmentstartdateb2"]        = PublisherPrefix + "secondaryemploymentstartdate",
-            [PublisherPrefix + "employercountb2"]              = PublisherPrefix + "secondaryemployercount",
-            [PublisherPrefix + "employernameb2"]               = PublisherPrefix + "secondaryemployername",
-            [PublisherPrefix + "incomeverificationflagb2"]     = PublisherPrefix + "secondaryincomeverifiedflag",
-            [PublisherPrefix + "incomeverificationmethodb2"]   = PublisherPrefix + "secondaryincomeverificationmethod",
-            [PublisherPrefix + "incomeb2"]                     = PublisherPrefix + "secondaryincome",
-            [PublisherPrefix + "employmentlengthmonthsb2"]     = PublisherPrefix + "secondaryemploymentlengthmonths",
-            [PublisherPrefix + "employmentlengthyearsb2"]      = PublisherPrefix + "secondaryemploymentlengthyears",
-            [PublisherPrefix + "nameb2"]                       = PublisherPrefix + "secondaryapplicantname",
-            [PublisherPrefix + "occupationtitleb2"]            = PublisherPrefix + "secondaryoccupationtitle",
-            [PublisherPrefix + "previousemploymentmonthsb2"]   = PublisherPrefix + "secondarypreviousemploymentmonths",
-            [PublisherPrefix + "previousemploymentyearsb2"]    = PublisherPrefix + "secondarypreviousemploymentyears",
-            [PublisherPrefix + "selfemployedb2"]               = PublisherPrefix + "secondaryselfemployedflag",
-            [PublisherPrefix + "ssnb2"]                        = PublisherPrefix + "secondaryssn",
+            { "B2 Credit Score",            PublisherPrefix + "secondarycreditscore" },
+            { "B2 Date Of Birth",           PublisherPrefix + "secondarydateofbirth" },
+            { "B2 Empl Start Date",         PublisherPrefix + "secondaryemploymentstartdate" },
+            { "B2 Employer Count",          PublisherPrefix + "secondaryemployercount" },
+            { "B2 Employer Name",           PublisherPrefix + "secondaryemployername" },
+            { "B2 Inc Verif Flg",           PublisherPrefix + "secondaryincomeverifiedflag" },
+            { "B2 Inc Verif F1g",           PublisherPrefix + "secondaryincomeverifiedflag" },
+            { "B2 Inc Verif Method",        PublisherPrefix + "secondaryincomeverificationmethod" },
+            { "B2 Income",                  PublisherPrefix + "secondaryincome" },
+            { "B2 Length Employed Months",  PublisherPrefix + "secondaryemploymentlengthmonths" },
+            { "B2 Length Employed Years",   PublisherPrefix + "secondaryemploymentlengthyears" },
+            { "B2 Name",                    PublisherPrefix + "secondaryapplicantname" },
+            { "B2 Occupation Title",        PublisherPrefix + "secondaryoccupationtitle" },
+            { "B2 Prev Employ Months",      PublisherPrefix + "secondarypreviousemploymentmonths" },
+            { "B2 Prev Employ Years",       PublisherPrefix + "secondarypreviousemploymentyears" },
+            { "B2 Self Employed",           PublisherPrefix + "secondaryselfemployedflag" },
+            { "B2 SSN",                     PublisherPrefix + "secondaryssn" },
 
             // CLTV variants use the long "combinedloantovalue" suffix on HOLDING
-            [PublisherPrefix + "decisionedcltv"] = PublisherPrefix + "decisionedcombinedloantovalue",
-            [PublisherPrefix + "contractcltv"]   = PublisherPrefix + "contractcombinedloantovalue",
+            { "DecisionedCLTV",             PublisherPrefix + "decisionedcombinedloantovalue" },
+            { "ContractCLTV",               PublisherPrefix + "contractcombinedloantovalue" },
 
-            // Approving-officer naming differs slightly
-            [PublisherPrefix + "approvingofficerassociateid"] = PublisherPrefix + "approvingofficerassociated",
+            // Approving-officer associate naming differs slightly
+            { "Approving Last Officer Associate ID", PublisherPrefix + "approvingofficerassociated" },
         };
+
+    // HOLDING mapping: Excel header → HOLDING (dmt_stg_origenate_holding_table)
+    // logical name. Same headers as STG, with HoldingHeaderOverrides applied. This is
+    // the SECOND of the two separate mappings — display headers collide with STG but
+    // logical names differ, so the two maps must be kept distinct.
+    public static readonly IReadOnlyDictionary<string, string> HoldingExcelHeaderToDataverse =
+        StgExcelHeaderToDataverse.ToDictionary(
+            kv => kv.Key,
+            kv => HoldingHeaderOverrides.TryGetValue(kv.Key, out var holding) ? holding : kv.Value,
+            StringComparer.OrdinalIgnoreCase);
+
+    // Business fields (exception columns excluded) in each table's OWN logical names.
+    // StreamAsync against STG uses StgBusinessFields; against HOLDING uses
+    // HoldingBusinessFields — never cross them, or the renamed columns won't read.
+    public static readonly IReadOnlyList<string> StgBusinessFields =
+        StgExcelHeaderToDataverse
+            .Where(kv => !ExcludedFromStg.Contains(kv.Value))
+            .Select(kv => kv.Value)
+            .Distinct()
+            .ToArray();
+
+    public static readonly IReadOnlyList<string> HoldingBusinessFields =
+        StgExcelHeaderToDataverse
+            .Where(kv => !ExcludedFromStg.Contains(kv.Value))
+            .Select(kv => HoldingHeaderOverrides.TryGetValue(kv.Key, out var holding) ? holding : kv.Value)
+            .Distinct()
+            .ToArray();
+
+    // Field-name translation maps, derived by joining the two header maps on the
+    // common Excel header. Only entries where STG and HOLDING logical names actually
+    // differ are included. EntityProjector consults these when copying rows:
+    //   - StgToHoldingField : BackupOldRowsStep   (STG → HOLDING)
+    //   - HoldingToStgField : ReconcileStep        (HOLDING → STG)
+    public static readonly IReadOnlyDictionary<string, string> StgToHoldingField = BuildRename(toHolding: true);
+    public static readonly IReadOnlyDictionary<string, string> HoldingToStgField = BuildRename(toHolding: false);
+
+    private static IReadOnlyDictionary<string, string> BuildRename(bool toHolding)
+    {
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var kv in StgExcelHeaderToDataverse)
+        {
+            if (ExcludedFromStg.Contains(kv.Value)) continue;
+            var stg = kv.Value;
+            var holding = HoldingHeaderOverrides.TryGetValue(kv.Key, out var h) ? h : kv.Value;
+            if (string.Equals(stg, holding, StringComparison.OrdinalIgnoreCase)) continue;
+            if (toHolding) map[stg] = holding;
+            else map[holding] = stg;
+        }
+        return map;
+    }
 }

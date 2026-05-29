@@ -85,9 +85,16 @@ public sealed class ReconcileStep : IPipelineStep
             var slice = orphans.Skip(i).Take(chunkSize).ToArray();
             var filter = InFilterBuilder.Build(ColumnMap.ApplicationNumberField, slice);
             var buffer = new List<Entity>();
-            await foreach (var item in _holding.StreamAsync(filter, ColumnMap.StgBusinessFields, ct))
+            await foreach (var item in _holding.StreamAsync(filter, ColumnMap.HoldingBusinessFields, ct))
             {
-                buffer.Add(_projector.Project(item, _stg.EntityLogicalName, ColumnMap.StgBusinessFields));
+                // Reading HOLDING (its own logical names) → writing STG: translate field
+                // names back via HoldingToStgField so the renamed primary/secondary/CLTV
+                // columns land in their STG equivalents.
+                buffer.Add(_projector.Project(
+                    item,
+                    _stg.EntityLogicalName,
+                    ColumnMap.HoldingBusinessFields,
+                    ColumnMap.HoldingToStgField));
                 if (buffer.Count >= _opts.InsertBatchSize)
                 {
                     var (ok, fail) = await FlushAsync(buffer, ct);

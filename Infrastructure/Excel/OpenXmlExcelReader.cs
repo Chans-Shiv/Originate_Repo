@@ -37,9 +37,9 @@ public sealed class OpenXmlExcelReader
             if (rowNum == 1)
             {
                 foreach (var kv in values) headers[kv.Key] = (kv.Value ?? "").Trim();
-                var mapped = headers.Values.Count(h => !string.IsNullOrWhiteSpace(h) && ColumnMap.ExcelHeaderToDataverse.ContainsKey(h));
+                var mapped = headers.Values.Count(h => !string.IsNullOrWhiteSpace(h) && ColumnMap.StgExcelHeaderToDataverse.ContainsKey(h));
                 var ignored = headers.Values
-                    .Where(h => !string.IsNullOrWhiteSpace(h) && !ColumnMap.ExcelHeaderToDataverse.ContainsKey(h))
+                    .Where(h => !string.IsNullOrWhiteSpace(h) && !ColumnMap.StgExcelHeaderToDataverse.ContainsKey(h))
                     .ToArray();
                 _log.LogInformation("Excel header row: {Total} columns, {Mapped} mapped to Dataverse, {Ignored} ignored",
                     headers.Count, mapped, ignored.Length);
@@ -59,7 +59,7 @@ public sealed class OpenXmlExcelReader
             foreach (var (colIdx, val) in values)
             {
                 if (!headers.TryGetValue(colIdx, out var header) || string.IsNullOrWhiteSpace(header)) continue;
-                if (!ColumnMap.ExcelHeaderToDataverse.TryGetValue(header, out var dvField))
+                if (!ColumnMap.StgExcelHeaderToDataverse.TryGetValue(header, out var dvField))
                 {
                     unmappedHeaders.Add(header);
                     continue;

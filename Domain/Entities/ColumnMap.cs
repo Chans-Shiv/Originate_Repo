@@ -223,6 +223,9 @@ public static class ColumnMap
 
             // Collateral Zip: STG uses dmt_collateralzip, HOLDING uses dmt_collateralzipcode.
             { "Collateral Zip", PublisherPrefix + "collateralzipcode" },
+
+            // Mailing Zip: STG uses dmt_mailingzip, HOLDING uses dmt_mailingzipcode.
+            { "Mailing Zip", PublisherPrefix + "mailingzipcode" },
         };
 
     // HOLDING mapping: Excel header → HOLDING (dmt_stg_origenate_holding_table)

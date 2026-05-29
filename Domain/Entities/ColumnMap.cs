@@ -217,9 +217,9 @@ public static class ColumnMap
             { "DecisionedCLTV",             PublisherPrefix + "decisionedcombinedloantovalue" },
             { "ContractCLTV",               PublisherPrefix + "contractcombinedloantovalue" },
 
-            // Approving-officer associate: STG "...Associate ID" (dmt_approvingofficerassociateid)
-            // becomes HOLDING "...Associated" (dmt_approvingofficerassociated) — no "id" suffix.
-            { "Approving Last Officer Associate ID", PublisherPrefix + "approvingofficerassociated" },
+            // NOTE: "Approving Last Officer Associate" is NOT overridden — despite the
+            // HOLDING display name reading "...Associated", its logical name is the same
+            // as STG (dmt_approvingofficerassociateid). Leaving it out keeps both equal.
 
             // Collateral Zip: STG uses dmt_collateralzip, HOLDING uses dmt_collateralzipcode.
             { "Collateral Zip", PublisherPrefix + "collateralzipcode" },

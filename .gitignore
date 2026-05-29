@@ -1,9 +1,66 @@
+# ── Build output ──
 bin/
 obj/
+out/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Bb]uild/
+[Bb]in/
+[Oo]bj/
+
+# ── Azure Functions ──
+# local.settings.json holds connection strings / account keys — never commit it.
+# Commit local.settings.example.json (placeholders only) as the template instead.
+local.settings.json
+.azurefunctions/
+azure-functions-core-tools/
+
+# ── .NET / NuGet ──
 *.user
 *.suo
+*.userprefs
+project.lock.json
+project.fragment.lock.json
+artifacts/
+*.nuget.props
+*.nuget.targets
+.packages/
+packages/
+*.nupkg
+*.snupkg
+msbuild.log
+msbuild.err
+msbuild.wrn
+
+# ── Test / coverage ──
+[Tt]est[Rr]esult*/
+coverage*.json
+coverage*.xml
+coverage*.info
+*.coverage
+*.coveragexml
+TestResults/
+
+# ── IDEs / editors ──
 .vs/
 .vscode/
+.idea/
+*.sln.iml
+*.DotSettings.user
 *.pubxml.user
-.claude/
+*.pubxml
+PublishProfiles/
 
+# ── OS cruft ──
+.DS_Store
+.DS_Store?
+Thumbs.db
+ehthumbs.db
+*.swp
+*~
+
+# ── Tooling / local ──
+.claude/
+*.log

@@ -4,13 +4,13 @@
     "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
     "AZURE_FUNCTIONS_ENVIRONMENT": "Development",
 
-    "_comment_runtime_storage": "Connection string with AccountKey, used by the Functions runtime (BlobTrigger control queue, QueueTrigger listener, host singleton lease). Matches reference project's local-dev pattern — RBAC bypassed for runtime state so we don't depend on per-user role propagation.",
+    "_comment_runtime_storage": "Connection string with AccountKey, used by the Functions runtime (BlobTrigger control queue, QueueTrigger listener, host singleton lease). RBAC bypassed for runtime state so we don't depend on per-user role propagation. Copy this file to local.settings.json and fill in real values — local.settings.json is gitignored.",
     "AzureWebJobsStorage": "DefaultEndpointsProtocol=https;AccountName=<STORAGE_ACCOUNT>;AccountKey=<ACCOUNT_KEY>;EndpointSuffix=core.windows.net",
 
     "_comment_app_storage": "Blob endpoint URI for app-level clients (BlobServiceClient + QueueServiceClient registered in Program.cs). These remain identity-based via DefaultAzureCredential. Queue URI is derived by swapping .blob. → .queue.",
     "StorageAccountUrl": "https://<STORAGE_ACCOUNT>.blob.core.windows.net",
 
-    "DataverseUrl": "https://org1e37fc51.crm.dynamics.com",
+    "DataverseUrl": "https://<ORG>.crm.dynamics.com",
     "MainContainerName": "originate-landing",
     "ArchiveContainerName": "originate-processed",
     "FailedContainerName": "originate-failed",

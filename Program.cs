@@ -114,6 +114,12 @@ var host = new HostBuilder()
             return new ErrorArchiveBlobWriter(container, sp.GetRequiredService<ILogger<ErrorArchiveBlobWriter>>());
         });
 
+        // Pre-create dead-letter queue + error-archive container at host startup so
+        // the QueueTrigger listener doesn't spam 404 QueueNotFound while waiting for
+        // a producer to lazily create them. Runs as IHostedService — fires before
+        // function listeners begin polling.
+        services.AddHostedService<StorageProvisioner>();
+
         // Dataverse — ServiceClient SDK with cached token + Polly resilience pipeline.
         services.AddSingleton<DataverseConnectionFactory>();
         services.AddSingleton<DataverseResiliencePipeline>();

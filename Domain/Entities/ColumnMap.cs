@@ -107,7 +107,7 @@ public static class ColumnMap
             { "Collateral County", PublisherPrefix + "collateralcounty" },
             { "Collateral State", PublisherPrefix + "collateralstate" },
             { "Collateral Street Address", PublisherPrefix + "collateralstreetaddress" },
-            { "Collateral Zip", PublisherPrefix + "collateralzipcode" },
+            { "Collateral Zip", PublisherPrefix + "collateralzip" },
             { "Cost Center Number", PublisherPrefix + "costcenternumber" },
             { "Date Application", PublisherPrefix + "applicationdate" },
             { "Date Booked", PublisherPrefix + "bookingdate" },
@@ -217,8 +217,12 @@ public static class ColumnMap
             { "DecisionedCLTV",             PublisherPrefix + "decisionedcombinedloantovalue" },
             { "ContractCLTV",               PublisherPrefix + "contractcombinedloantovalue" },
 
-            // Approving-officer associate naming differs slightly
-            { "Approving Last Officer Associate ID", PublisherPrefix + "approvingofficerassociateid" },
+            // Approving-officer associate: STG "...Associate ID" (dmt_approvingofficerassociateid)
+            // becomes HOLDING "...Associated" (dmt_approvingofficerassociated) — no "id" suffix.
+            { "Approving Last Officer Associate ID", PublisherPrefix + "approvingofficerassociated" },
+
+            // Collateral Zip: STG uses dmt_collateralzip, HOLDING uses dmt_collateralzipcode.
+            { "Collateral Zip", PublisherPrefix + "collateralzipcode" },
         };
 
     // HOLDING mapping: Excel header → HOLDING (dmt_stg_origenate_holding_table)

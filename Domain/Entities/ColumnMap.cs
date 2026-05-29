@@ -96,7 +96,7 @@ public static class ColumnMap
             { "LOAN TO VALUE", PublisherPrefix + "loantovalueratio" },
             { "DecisionedCLTV", PublisherPrefix + "decisionedcltv" },
             { "ContractCLTV", PublisherPrefix + "contractcltv" },
-            { "DTT", PublisherPrefix + "debttoincomeratio" },
+            { "DTI", PublisherPrefix + "debttoincomeratio" },
             { "Program", PublisherPrefix + "loanprogram" },
             { "Collateral Description", PublisherPrefix + "collateraldescription" },
             { "Collateral Value", PublisherPrefix + "collateralvalue" },
@@ -168,4 +168,59 @@ public static class ColumnMap
             .Where(v => !ExcludedFromStg.Contains(v))
             .Distinct()
             .ToArray();
+
+    // ── HOLDING table field renames ──
+    // STG and HOLDING share most logical names, but a handful diverge:
+    //   - Borrower 1/2 are renamed to primary/secondary applicant
+    //   - CLTV columns use the long "combinedloantovalue" form on HOLDING
+    //   - Approving Last Officer Associate uses a slightly different name
+    // Any STG field NOT in this dictionary is assumed to use the SAME logical
+    // name on HOLDING. EntityProjector consults this map when projecting an
+    // STG entity into a HOLDING entity.
+    public static readonly IReadOnlyDictionary<string, string> HoldingFieldByStgField =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            // Borrower 1 → primary applicant
+            [PublisherPrefix + "creditscoreb1"]                = PublisherPrefix + "primarycreditscore",
+            [PublisherPrefix + "dateofbirthb1"]                = PublisherPrefix + "primarydateofbirth",
+            [PublisherPrefix + "employmentstartdateb1"]        = PublisherPrefix + "primaryemploymentstartdate",
+            [PublisherPrefix + "employercountb1"]              = PublisherPrefix + "primaryemployercount",
+            [PublisherPrefix + "employernameb1"]               = PublisherPrefix + "primaryemployername",
+            [PublisherPrefix + "incomeverificationflagb1"]     = PublisherPrefix + "primaryincomeverifiedflag",
+            [PublisherPrefix + "incomeverificationmethodb1"]   = PublisherPrefix + "primaryincomeverificationmethod",
+            [PublisherPrefix + "incomeb1"]                     = PublisherPrefix + "primaryincome",
+            [PublisherPrefix + "employmentlengthmonthsb1"]     = PublisherPrefix + "primaryemploymentlengthmonths",
+            [PublisherPrefix + "employmentlengthyearsb1"]      = PublisherPrefix + "primaryemploymentlengthyears",
+            [PublisherPrefix + "nameb1"]                       = PublisherPrefix + "primaryapplicantname",
+            [PublisherPrefix + "occupationtitleb1"]            = PublisherPrefix + "primaryoccupationtitle",
+            [PublisherPrefix + "previousemploymentmonthsb1"]   = PublisherPrefix + "primarypreviousemploymentmonths",
+            [PublisherPrefix + "previousemploymentyearsb1"]    = PublisherPrefix + "primarypreviousemploymentyears",
+            [PublisherPrefix + "selfemployedb1"]               = PublisherPrefix + "primaryselfemployedflag",
+            [PublisherPrefix + "ssnb1"]                        = PublisherPrefix + "primaryssn",
+
+            // Borrower 2 → secondary applicant
+            [PublisherPrefix + "creditscoreb2"]                = PublisherPrefix + "secondarycreditscore",
+            [PublisherPrefix + "dateofbirthb2"]                = PublisherPrefix + "secondarydateofbirth",
+            [PublisherPrefix + "employmentstartdateb2"]        = PublisherPrefix + "secondaryemploymentstartdate",
+            [PublisherPrefix + "employercountb2"]              = PublisherPrefix + "secondaryemployercount",
+            [PublisherPrefix + "employernameb2"]               = PublisherPrefix + "secondaryemployername",
+            [PublisherPrefix + "incomeverificationflagb2"]     = PublisherPrefix + "secondaryincomeverifiedflag",
+            [PublisherPrefix + "incomeverificationmethodb2"]   = PublisherPrefix + "secondaryincomeverificationmethod",
+            [PublisherPrefix + "incomeb2"]                     = PublisherPrefix + "secondaryincome",
+            [PublisherPrefix + "employmentlengthmonthsb2"]     = PublisherPrefix + "secondaryemploymentlengthmonths",
+            [PublisherPrefix + "employmentlengthyearsb2"]      = PublisherPrefix + "secondaryemploymentlengthyears",
+            [PublisherPrefix + "nameb2"]                       = PublisherPrefix + "secondaryapplicantname",
+            [PublisherPrefix + "occupationtitleb2"]            = PublisherPrefix + "secondaryoccupationtitle",
+            [PublisherPrefix + "previousemploymentmonthsb2"]   = PublisherPrefix + "secondarypreviousemploymentmonths",
+            [PublisherPrefix + "previousemploymentyearsb2"]    = PublisherPrefix + "secondarypreviousemploymentyears",
+            [PublisherPrefix + "selfemployedb2"]               = PublisherPrefix + "secondaryselfemployedflag",
+            [PublisherPrefix + "ssnb2"]                        = PublisherPrefix + "secondaryssn",
+
+            // CLTV variants use the long "combinedloantovalue" suffix on HOLDING
+            [PublisherPrefix + "decisionedcltv"] = PublisherPrefix + "decisionedcombinedloantovalue",
+            [PublisherPrefix + "contractcltv"]   = PublisherPrefix + "contractcombinedloantovalue",
+
+            // Approving-officer naming differs slightly
+            [PublisherPrefix + "approvingofficerassociateid"] = PublisherPrefix + "approvingofficerassociated",
+        };
 }

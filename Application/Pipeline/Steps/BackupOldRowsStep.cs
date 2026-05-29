@@ -47,7 +47,11 @@ public sealed class BackupOldRowsStep : IPipelineStep
 
         await foreach (var item in _stg.StreamAsync(filter, ColumnMap.StgBusinessFields, ct))
         {
-            buffer.Add(_projector.Project(item, _holding.EntityLogicalName, ColumnMap.StgBusinessFields));
+            buffer.Add(_projector.Project(
+                item,
+                _holding.EntityLogicalName,
+                ColumnMap.StgBusinessFields,
+                ColumnMap.HoldingFieldByStgField));
             if (buffer.Count >= _opts.InsertBatchSize)
             {
                 batchNum++;

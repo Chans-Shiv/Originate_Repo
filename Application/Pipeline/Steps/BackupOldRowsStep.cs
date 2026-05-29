@@ -40,7 +40,7 @@ public sealed class BackupOldRowsStep : IPipelineStep
             cutoff, _opts.AgeThresholdMonths, _opts.MaxParallelBatches);
 
         using var sem = new SemaphoreSlim(_opts.MaxParallelBatches, _opts.MaxParallelBatches);
-        var inFlight = new List<Task<int>>();
+        var inFlight = new List<Task<BatchOutcome>>();
         var buffer = new List<Entity>(_opts.InsertBatchSize);
         long total = 0;
         int batchNum = 0;
@@ -66,13 +66,26 @@ public sealed class BackupOldRowsStep : IPipelineStep
             total += buffer.Count;
             inFlight.Add(FlushAsync(buffer.ToArray(), batchNum, total, sem, ct));
         }
-        var allFailures = await Task.WhenAll(inFlight);
-        var totalFailures = allFailures.Sum();
+        var batchResults = await Task.WhenAll(inFlight);
+        var totalFailures = batchResults.Sum(r => r.Failed);
+        var firstError = batchResults.Select(r => r.FirstError).FirstOrDefault(e => e is not null);
+
         _log.LogInformation("EventName=Backup Total={Total} Batches={Batches} Failed={Failed}",
             total, batchNum, totalFailures);
+
+        // CRITICAL: if even one row failed to reach HOLDING, abort the whole pipeline.
+        // The next step (TruncateStgStep) wipes STG — letting it run after an
+        // incomplete backup would lose the un-backed-up rows permanently. Throwing
+        // here stops the pipeline before truncate, leaves STG intact, and moves the
+        // blob to the failed container for retry. ClearHoldingStep runs first and is
+        // idempotent, so a retry cleanly re-clears the partial backup and starts over.
+        if (totalFailures > 0)
+            throw new InvalidOperationException(
+                $"HOLDING backup incomplete: {totalFailures} of {total} row(s) failed to insert. " +
+                $"Aborting before STG truncate to prevent data loss. First error: {firstError ?? "(none)"}");
     }
 
-    private async Task<int> FlushAsync(Entity[] buffer, int batchNum, long runningTotal, SemaphoreSlim sem, CancellationToken ct)
+    private async Task<BatchOutcome> FlushAsync(Entity[] buffer, int batchNum, long runningTotal, SemaphoreSlim sem, CancellationToken ct)
     {
         await sem.WaitAsync(ct);
         try
@@ -91,8 +104,10 @@ public sealed class BackupOldRowsStep : IPipelineStep
                     batchNum, failed, buffer.Length, firstErr);
             else
                 _log.LogInformation("EventName=BackupBatch Batch={Batch} Rows={Count} Failed=0", batchNum, buffer.Length);
-            return failed;
+            return new BatchOutcome(failed, firstErr);
         }
         finally { sem.Release(); }
     }
+
+    private readonly record struct BatchOutcome(int Failed, string? FirstError);
 }

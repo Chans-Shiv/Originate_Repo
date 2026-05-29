@@ -26,9 +26,10 @@ public sealed class DeadLetterMessage
     // the offending row in the file.
     public int RowNumber { get; set; }
 
-    // Business identifiers carried from the source row. Both optional —
+    // Business identifiers carried from the source row. All optional —
     // very-early failures (e.g. header parse) won't have these populated.
     public string? AccountNumber { get; set; }
+    public string? ApplicationNumber { get; set; }
     public Guid? LoanApplicationId { get; set; }
 
     // The original failure reason, captured at the producer.

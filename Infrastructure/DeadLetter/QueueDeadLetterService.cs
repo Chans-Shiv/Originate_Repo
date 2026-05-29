@@ -2,6 +2,7 @@ using System.Text.Json;
 using Azure.Storage.Queues;
 using Microsoft.Extensions.Logging;
 using OrigenateFunction.Diagnostics;
+using OrigenateFunction.Domain.Entities;
 using OrigenateFunction.Domain.Interfaces;
 using OrigenateFunction.Domain.Models;
 
@@ -52,9 +53,13 @@ public sealed class QueueDeadLetterService : IDeadLetterService
 
         foreach (var f in failures)
         {
-            // Pull AccountNumber from the source row if present; LoanApplicationId is
-            // not always known (early-stage failures) so it's left null.
-            f.Source.Fields.TryGetValue("dmt_accountnumber", out var accountNumberObj);
+            // Pull identifiers from the source row's already-coerced field dictionary.
+            // ApplicationNumber comes from OrigenateRow's dedicated property
+            // (PolicyExceptions and similar rows go through a different builder path
+            // and won't have this populated). LoanApplicationId stays null because
+            // it's only known once Dataverse has assigned one — pre-insert failures
+            // can't know it.
+            f.Source.Fields.TryGetValue(ColumnMap.PublisherPrefix + "accountnumber", out var accountNumberObj);
 
             var msg = new DeadLetterMessage
             {
@@ -63,6 +68,7 @@ public sealed class QueueDeadLetterService : IDeadLetterService
                 StepName = stepName,
                 RowNumber = f.RowNumber,
                 AccountNumber = accountNumberObj?.ToString(),
+                ApplicationNumber = f.Source.ApplicationNumber,
                 LoanApplicationId = null,
                 ErrorMessage = f.Error,
                 EnqueuedAt = now,

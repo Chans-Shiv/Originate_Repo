@@ -19,23 +19,18 @@ public static class ColumnMap
     public const string PolicyExceptionsField        = PublisherPrefix + "policyexception";
     public const string PolicyExceptionsReasonField  = PublisherPrefix + "policyexceptionreason";
 
-    // ── Error table (placeholders — fill in once Dataverse schema is finalised) ──
-    // DataverseErrorTableService refuses to write while ErrorTableEntityLogical starts
-    // with "<<", so the queue + archive keep buffering until these are replaced with
-    // real logical names. Once filled in, restart the host and the queue drains.
-    public const string ErrorTableEntityLogical = "<<ERROR_TABLE_LOGICAL>>";
-    public const string ErrorTable_AccountNumber  = "<<ACCOUNT_NUMBER_FIELD>>";
-    public const string ErrorTable_LoanAppId      = "<<LOAN_APP_ID_FIELD>>";
-    public const string ErrorTable_RowNumber      = "<<ROW_NUMBER_FIELD>>";
-    public const string ErrorTable_StepName       = "<<STEP_NAME_FIELD>>";
-    public const string ErrorTable_ErrorMessage   = "<<ERROR_MESSAGE_FIELD>>";
-    public const string ErrorTable_InvocationId   = "<<INVOCATION_ID_FIELD>>";
-    public const string ErrorTable_SourceBlobName = "<<SOURCE_BLOB_FIELD>>";
-    public const string ErrorTable_EnqueuedAt     = "<<ENQUEUED_AT_FIELD>>";
-
-    // Helper used by DataverseErrorTableService at startup to detect unconfigured schema.
-    public static bool IsErrorTableConfigured =>
-        !ErrorTableEntityLogical.StartsWith("<<", StringComparison.Ordinal);
+    // ── Error table ──
+    // The auto-number / primary key column (dmt_ID) is populated by Dataverse; we
+    // never write to it. Row diagnostics that don't have a dedicated column (source
+    // blob name, row number, enqueue timestamp) are prepended to the ErrorMessage
+    // body by DataverseErrorTableService so a single column carries enough context
+    // for triage without jumping to the queue/archive blob.
+    public const string ErrorTableEntityLogical    = PublisherPrefix + "stg_origenate_errortable";
+    public const string ErrorTable_AccountNumber     = PublisherPrefix + "accountnumber";
+    public const string ErrorTable_ApplicationNumber = PublisherPrefix + "applicationnumber";
+    public const string ErrorTable_ErrorMessage      = PublisherPrefix + "errormessage";
+    public const string ErrorTable_InvocationId      = PublisherPrefix + "invocationid";
+    public const string ErrorTable_Process           = PublisherPrefix + "process";
 
     // Keys = exact Excel header strings (with spaces). Lookup is case-insensitive,
     // so "ACCOUNT NUMBER" and "Account Number" both match — but spacing matters.

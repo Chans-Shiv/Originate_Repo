@@ -4,11 +4,9 @@
     "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
     "AZURE_FUNCTIONS_ENVIRONMENT": "Development",
 
-    "_comment_runtime_storage": "Connection string with AccountKey, used by the Functions runtime (BlobTrigger control queue, QueueTrigger listener, host singleton lease). RBAC bypassed for runtime state so we don't depend on per-user role propagation. Copy this file to local.settings.json and fill in real values — local.settings.json is gitignored.",
-    "AzureWebJobsStorage": "DefaultEndpointsProtocol=https;AccountName=<STORAGE_ACCOUNT>;AccountKey=<ACCOUNT_KEY>;EndpointSuffix=core.windows.net",
-
-    "_comment_app_storage": "Blob endpoint URI for app-level clients (BlobServiceClient + QueueServiceClient registered in Program.cs). These remain identity-based via DefaultAzureCredential. Queue URI is derived by swapping .blob. → .queue.",
-    "StorageAccountUrl": "https://<STORAGE_ACCOUNT>.blob.core.windows.net",
+    "_comment_storage": "Identity-based AzureWebJobsStorage (no connection string / account key). The Functions runtime AND the app-level BlobServiceClient/QueueServiceClient authenticate via DefaultAzureCredential against these URIs. The signed-in identity needs Storage Blob Data Contributor + Storage Queue Data Contributor on the account. In Azure, set AzureWebJobsStorage__credential=managedidentity (and __clientId for a user-assigned MI). Copy this file to local.settings.json and fill in real values — local.settings.json is gitignored.",
+    "AzureWebJobsStorage__blobServiceUri":  "https://<STORAGE_ACCOUNT>.blob.core.windows.net",
+    "AzureWebJobsStorage__queueServiceUri": "https://<STORAGE_ACCOUNT>.queue.core.windows.net",
 
     "DataverseUrl": "https://<ORG>.crm.dynamics.com",
     "MainContainerName": "originate-landing",

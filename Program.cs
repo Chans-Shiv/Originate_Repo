@@ -65,21 +65,22 @@ var host = new HostBuilder()
             });
         });
 
-        // BlobServiceClient — identity-based, resolves from StorageAccountUrl. The
-        // Functions runtime's own storage clients (BlobTrigger control queue, QueueTrigger
-        // listener) use the AzureWebJobsStorage connection string with AccountKey, so the
-        // runtime + RBAC concerns are decoupled. Caller principal still needs "Storage
-        // Blob Data Contributor" on the account for THIS client's operations.
+        // BlobServiceClient — identity-based, resolves from AzureWebJobsStorage__blobServiceUri.
+        // Same identity-based URI the Functions runtime uses for the BlobTrigger / QueueTrigger
+        // (Connection = "AzureWebJobsStorage"), so app + runtime share one account and one set
+        // of RBAC grants. The caller principal must hold "Storage Blob Data Contributor" +
+        // "Storage Queue Data Contributor" on the account.
         services.AddSingleton(sp =>
         {
             var cfg = sp.GetRequiredService<IConfiguration>();
-            var blobUri = cfg["StorageAccountUrl"];
-            RequireUri(blobUri, "StorageAccountUrl");
+            var blobUri = cfg["AzureWebJobsStorage__blobServiceUri"];
+            RequireUri(blobUri, "AzureWebJobsStorage__blobServiceUri");
             return new BlobServiceClient(new Uri(blobUri!), sp.GetRequiredService<TokenCredential>());
         });
 
-        // QueueServiceClient — derived from StorageAccountUrl (.blob. → .queue.), so blob
-        // and queue stay on the same account by construction.
+        // QueueServiceClient — uses AzureWebJobsStorage__queueServiceUri when present,
+        // otherwise derives it from the blob URI (.blob. → .queue.) so blob and queue stay
+        // on the same account by construction.
         //
         // MessageEncoding = Base64 matches the WebJobs QueueTrigger extension's default
         // decoding; without it, queue-trigger consumers would log "Message decoding has
@@ -87,9 +88,11 @@ var host = new HostBuilder()
         services.AddSingleton(sp =>
         {
             var cfg = sp.GetRequiredService<IConfiguration>();
-            var blobUri = cfg["StorageAccountUrl"];
-            RequireUri(blobUri, "StorageAccountUrl");
-            var queueUri = new Uri(blobUri!.Replace(".blob.core.windows.net", ".queue.core.windows.net"));
+            var blobUri = cfg["AzureWebJobsStorage__blobServiceUri"];
+            RequireUri(blobUri, "AzureWebJobsStorage__blobServiceUri");
+            var queueUri = cfg["AzureWebJobsStorage__queueServiceUri"] is { Length: > 0 } q
+                ? new Uri(q)
+                : new Uri(blobUri!.Replace(".blob.core.windows.net", ".queue.core.windows.net"));
             return new QueueServiceClient(
                 queueUri,
                 sp.GetRequiredService<TokenCredential>(),

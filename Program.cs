@@ -73,7 +73,13 @@ var host = new HostBuilder()
         services.AddSingleton(sp =>
         {
             var cfg = sp.GetRequiredService<IConfiguration>();
-            var blobUri = cfg["AzureWebJobsStorage__blobServiceUri"];
+            // The setting is written "AzureWebJobsStorage__blobServiceUri" in
+            // local.settings.json / Azure App Settings (the identity-based connection
+            // convention the Functions runtime recognises). .NET's configuration
+            // provider maps "__" to ":" when it loads environment variables, so read it
+            // back through IConfiguration with the ":" delimiter — the literal "__" form
+            // does NOT resolve here and yields null.
+            var blobUri = cfg["AzureWebJobsStorage:blobServiceUri"];
             RequireUri(blobUri, "AzureWebJobsStorage__blobServiceUri");
             return new BlobServiceClient(new Uri(blobUri!), sp.GetRequiredService<TokenCredential>());
         });
@@ -88,9 +94,10 @@ var host = new HostBuilder()
         services.AddSingleton(sp =>
         {
             var cfg = sp.GetRequiredService<IConfiguration>();
-            var blobUri = cfg["AzureWebJobsStorage__blobServiceUri"];
+            // See the BlobServiceClient note above: read with the ":" delimiter, not "__".
+            var blobUri = cfg["AzureWebJobsStorage:blobServiceUri"];
             RequireUri(blobUri, "AzureWebJobsStorage__blobServiceUri");
-            var queueUri = cfg["AzureWebJobsStorage__queueServiceUri"] is { Length: > 0 } q
+            var queueUri = cfg["AzureWebJobsStorage:queueServiceUri"] is { Length: > 0 } q
                 ? new Uri(q)
                 : new Uri(blobUri!.Replace(".blob.core.windows.net", ".queue.core.windows.net"));
             return new QueueServiceClient(

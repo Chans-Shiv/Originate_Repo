@@ -65,27 +65,31 @@ var host = new HostBuilder()
             });
         });
 
-        // BlobServiceClient for the app's blob lifecycle (landing → processed/failed)
-        // and the error archive. Points at StorageAccountUrl — a DEDICATED setting kept
-        // separate from the host's AzureWebJobsStorage connection (the same decoupling
-        // the SqlToDataverseSync reference uses with TrackingStorageAccountUrl), so the
-        // app's data storage is configured independently of the Functions host plumbing.
-        // It's a flat key, so it's not subject to the "__"→":" env-var remapping that the
-        // AzureWebJobsStorage__* host keys require. Uses the shared DefaultAzureCredential
-        // — Managed Identity in Azure, your VS / CLI sign-in locally. The principal must
-        // hold "Storage Blob Data Contributor" on the account.
+        // App-level Blob + Queue clients bind to the "OrigenateStorage" connection — the
+        // DATA account (sadveaddoc0001), the SAME named connection the blob/queue triggers
+        // use (see Functions/*). Trigger source and app operations must share one account
+        // because BlobArchiver/FailedBlobMover do a same-account server-side copy.
+        //
+        // Deliberately NOT AzureWebJobsStorage: that connection is the host's own plumbing
+        // (blob-trigger receipts + internal control queues + leases) and can point at the
+        // Function App's default account, so the heavy roles it needs (Storage Account
+        // Contributor + Storage Blob Data Owner) land there — leaving sadveaddoc0001
+        // needing only Storage Blob/Queue Data Contributor.
+        //
+        // Written "OrigenateStorage__blobServiceUri" in settings; the env-var provider maps
+        // "__"→":", so read with the ":" delimiter here. Shared DefaultAzureCredential
+        // (Managed Identity in Azure; VS / CLI sign-in locally).
         services.AddSingleton(sp =>
         {
             var cfg = sp.GetRequiredService<IConfiguration>();
-            var blobUri = cfg["StorageAccountUrl"];
-            RequireUri(blobUri, "StorageAccountUrl");
+            var blobUri = cfg["OrigenateStorage:blobServiceUri"];
+            RequireUri(blobUri, "OrigenateStorage__blobServiceUri");
             return new BlobServiceClient(new Uri(blobUri!), sp.GetRequiredService<TokenCredential>());
         });
 
-        // QueueServiceClient for the dead-letter producer. The queue endpoint is derived
-        // from StorageAccountUrl (.blob. → .queue.) so blob and queue always resolve to
-        // the same account by construction. Uses the shared DefaultAzureCredential; the
-        // principal must hold "Storage Queue Data Contributor" on the account.
+        // QueueServiceClient (dead-letter producer) — same OrigenateStorage connection as
+        // the QueueTrigger consumer, so producer and consumer share one queue. Prefer the
+        // explicit queueServiceUri; fall back to deriving it from the blob URI.
         //
         // MessageEncoding = Base64 matches the WebJobs QueueTrigger extension's default
         // decoding; without it, queue-trigger consumers would log "Message decoding has
@@ -93,11 +97,11 @@ var host = new HostBuilder()
         services.AddSingleton(sp =>
         {
             var cfg = sp.GetRequiredService<IConfiguration>();
-            var blobUri = cfg["StorageAccountUrl"];
-            RequireUri(blobUri, "StorageAccountUrl");
-            var queueUri = new Uri(blobUri!.Replace(".blob.core.windows.net", ".queue.core.windows.net"));
+            var queueUri = cfg["OrigenateStorage:queueServiceUri"]
+                ?? cfg["OrigenateStorage:blobServiceUri"]?.Replace(".blob.core.windows.net", ".queue.core.windows.net");
+            RequireUri(queueUri, "OrigenateStorage__queueServiceUri");
             return new QueueServiceClient(
-                queueUri,
+                new Uri(queueUri!),
                 sp.GetRequiredService<TokenCredential>(),
                 new QueueClientOptions { MessageEncoding = QueueMessageEncoding.Base64 });
         });

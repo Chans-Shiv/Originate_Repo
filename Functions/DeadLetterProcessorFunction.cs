@@ -41,7 +41,7 @@ public sealed class DeadLetterProcessorFunction
 
     [Function("DeadLetterProcessor")]
     public async Task RunAsync(
-        [QueueTrigger("%DeadLetterQueueName%", Connection = "AzureWebJobsStorage")] DeadLetterMessage msg,
+        [QueueTrigger("%DeadLetterQueueName%", Connection = "OrigenateStorage")] DeadLetterMessage msg,
         int dequeueCount,
         CancellationToken ct)
     {

@@ -1,4 +1,4 @@
-# OrigenateFunction
+# Fhn.Originate.FtbanknewSync
 
 Azure Function (C# .NET 8 isolated worker) that processes Origenate Excel uploads from `originate-landing` in storage account `sadveaddoc0001`, syncs Microsoft Dataverse staging tables, archives the file to `originate-processed`, and routes row-level failures to `originate-failed`.
 
@@ -16,7 +16,7 @@ See `/Users/shivamchandra/.claude/plans/rustling-kindling-penguin.md` for the de
 
 ## Before first run — fill in placeholders
 
-Open `src/OrigenateFunction/Models/ColumnMap.cs` and replace:
+Open `Domain/Entities/ColumnMap.cs` and replace:
 
 1. `PublisherPrefix` — currently `"new_"`. Replace with the real prefix (e.g., `"cr1a3_"`).
 2. The `ExcelHeaderToDataverse` dictionary — add every column from the Origenate Excel that should land in `STG_ORIGENATE`, mapping Excel header text → Dataverse logical column name.
@@ -25,13 +25,12 @@ Open `src/OrigenateFunction/Models/ColumnMap.cs` and replace:
 ## Build
 
 ```bash
-dotnet build src/OrigenateFunction/OrigenateFunction.csproj
+dotnet build Fhn.Originate.FtbanknewSync.csproj
 ```
 
 ## Run locally
 
 ```bash
-cd src/OrigenateFunction
 func start
 ```
 

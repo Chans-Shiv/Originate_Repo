@@ -1,0 +1,26 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
+    "AZURE_FUNCTIONS_ENVIRONMENT": "Development",
+
+    "_comment_credential": "LOCAL DEV ONLY. The Functions HOST authenticates to the identity-based storage connection (OrigenateStorage, used by the blob & queue triggers) in its own process and CANNOT use the interactive browser — only non-interactive developer credentials (Visual Studio sign-in, Azure PowerShell, az login). AZURE_TOKEN_CREDENTIALS=dev limits DefaultAzureCredential to those and skips the Managed Identity / IMDS probe that fails 'Identity not found' on a box with no assigned identity. Not set in Azure, where the Function App's Managed Identity is used.",
+    "AZURE_TOKEN_CREDENTIALS": "dev",
+
+    "_comment_storage": "TWO connections. AzureWebJobsStorage = Functions HOST plumbing ONLY (blob-trigger receipts + internal control queues + host leases). Locally use the Azurite emulator (UseDevelopmentStorage=true); in Azure point it at the Function App's DEFAULT storage account (connection string is fine). The blob trigger's heavy bookkeeping ALWAYS uses AzureWebJobsStorage, so the elevated roles (Storage Account Contributor + Storage Blob Data Owner) land on THAT account. OrigenateStorage = the DATA account: blob-trigger source (originate-landing), app BlobServiceClient/QueueServiceClient, and the dead-letter queue (producer + QueueTrigger consumer). Identity-based via DefaultAzureCredential; the account needs ONLY Storage Blob Data Contributor + Storage Queue Data Contributor. Requires Azurite running locally. Copy this file to local.settings.json and fill in real values — local.settings.json is gitignored.",
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "OrigenateStorage__blobServiceUri":  "https://<STORAGE_ACCOUNT>.blob.core.windows.net",
+    "OrigenateStorage__queueServiceUri": "https://<STORAGE_ACCOUNT>.queue.core.windows.net",
+
+    "DataverseUrl": "https://<ORG>.crm.dynamics.com",
+    "MainContainerName": "originate-landing",
+    "ArchiveContainerName": "originate-processed",
+    "FailedContainerName": "originate-failed",
+    "AgeThresholdMonths": "13",
+    "AzureTenantId": "",
+    "UseInteractiveBrowser": "true",
+
+    "DeadLetterQueueName": "origenate-dead-letter",
+    "ErrorArchiveContainerName": "origenate-error-archive"
+  }
+}

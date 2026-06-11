@@ -13,7 +13,7 @@
       "Host.Aggregator": "Warning"
     }
   },
-  "functionTimeout": "00:30:00",
+  "functionTimeout": "-1",
   "extensions": {
     "blobs": {
       "maxDegreeOfParallelism": 1

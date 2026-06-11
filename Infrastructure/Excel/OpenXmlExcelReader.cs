@@ -19,7 +19,12 @@ public sealed class OpenXmlExcelReader
         var sheet = wbPart.Workbook.Descendants<Sheet>().FirstOrDefault()
             ?? throw new InvalidDataException("No sheet found.");
         var wsPart = (WorksheetPart)wbPart.GetPartById(sheet.Id!);
-        var sst = wbPart.SharedStringTablePart?.SharedStringTable;
+        // Resolve shared strings into a flat array ONCE by streaming the part. Touching
+        // wbPart.SharedStringTablePart.SharedStringTable would materialize the entire
+        // table as a DOM (hundreds of MB on a large file) and turn every text-cell lookup
+        // into an O(n) scan — the two things that were OOM-ing / pinning the worker CPU.
+        // A string[] is a fraction of the memory and gives O(1) lookups.
+        var sharedStrings = LoadSharedStrings(wbPart);
 
         using var reader = OpenXmlReader.Create(wsPart);
         var headers = new Dictionary<int, string>();
@@ -32,7 +37,7 @@ public sealed class OpenXmlExcelReader
             if (reader.ElementType != typeof(Row) || !reader.IsStartElement) continue;
 
             rowNum++;
-            var values = ReadRowValues(reader, sst);
+            var values = ReadRowValues(reader, sharedStrings);
 
             if (rowNum == 1)
             {
@@ -75,7 +80,7 @@ public sealed class OpenXmlExcelReader
             dataRows, skippedEmpty, xlsxPath);
     }
 
-    private static Dictionary<int, string?> ReadRowValues(OpenXmlReader reader, SharedStringTable? sst)
+    private static Dictionary<int, string?> ReadRowValues(OpenXmlReader reader, string[] sharedStrings)
     {
         var result = new Dictionary<int, string?>();
         while (reader.Read())
@@ -88,10 +93,10 @@ public sealed class OpenXmlExcelReader
             var colIdx = ColRefToIndex(cell.CellReference!.Value!);
 
             string? value = cell.CellValue?.InnerText;
-            if (cell.DataType?.Value == CellValues.SharedString && sst is not null
-                && int.TryParse(value, out var sIdx) && sIdx < sst.ChildElements.Count)
+            if (cell.DataType?.Value == CellValues.SharedString
+                && int.TryParse(value, out var sIdx) && sIdx >= 0 && sIdx < sharedStrings.Length)
             {
-                value = sst.ChildElements[sIdx].InnerText;
+                value = sharedStrings[sIdx];
             }
             else if (cell.DataType?.Value == CellValues.InlineString)
             {
@@ -105,6 +110,24 @@ public sealed class OpenXmlExcelReader
             result[colIdx] = value;
         }
         return result;
+    }
+
+    // Streams sharedStrings.xml into a flat array (index → value) without building the
+    // full SharedStringTable DOM. Each item is loaded, its text copied out, then discarded,
+    // so peak memory is one element plus the growing string list — not the whole table.
+    private static string[] LoadSharedStrings(WorkbookPart wbPart)
+    {
+        var part = wbPart.SharedStringTablePart;
+        if (part is null) return Array.Empty<string>();
+
+        var list = new List<string>();
+        using var reader = OpenXmlReader.Create(part);
+        while (reader.Read())
+        {
+            if (reader.ElementType == typeof(SharedStringItem) && reader.IsStartElement)
+                list.Add(reader.LoadCurrentElement()!.InnerText);
+        }
+        return list.ToArray();
     }
 
     private static int ColRefToIndex(string cellRef)
